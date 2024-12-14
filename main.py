@@ -1,4 +1,3 @@
-
 import torch
 import argparse
 import contexttimer
@@ -21,7 +20,7 @@ MODELZOO = {
     "llama2-7b" : "/share_nfs/fangjiarui/root/code/hf_models/llama-2-7b-hf",
     "llama2-70b" : "/share_nfs/fangjiarui/root/code/hf_models/llama-2-70b-hf",
     "bloom-560m": "/share_nfs/fangjiarui/root/code/hf_models/bloom-560m",
-    "bloom7b": "/share_nfs/fangjiarui/root/code/hf_models/bloomz-7b1",
+    "bloom-7b": "/share_nfs/fangjiarui/root/code/hf_models/bloomz-7b1",
     "baichuan-7b": "/share_nfs/duanqiyuan/models/source_models/hf/baichuan-7B",
     "baichuan-13b": "/share_nfs/duanqiyuan/models/source_models/hf/Baichuan-13B-Base",
 }
@@ -40,7 +39,6 @@ def parse_arguments():
     parser.add_argument('--gamma', '-g', type=int, default=4, help='guess time.')
     args = parser.parse_args()
     return args
-
 
 def color_print(text):
     print(Fore.RED + text + Style.RESET_ALL)
@@ -81,11 +79,17 @@ def generate(input_text, approx_model_name, target_model_name, num_tokens=20, ga
     print(f"begin loading models: \n {approx_model_name} \n {target_model_name}")
     small_model = AutoModelForCausalLM.from_pretrained(approx_model_name, 
                                                        torch_dtype=torch.float16,
-                                                       device_map="auto",
+                                                       #device_map="auto",
+                                                       device_map="cuda",
+                                                       load_in_8bit=True,
+                                                       #offload_folder="offload",
                                                        trust_remote_code=True)
     large_model = AutoModelForCausalLM.from_pretrained(target_model_name, 
                                                        torch_dtype=torch.float16,
-                                                       device_map="auto",
+                                                       #device_map="auto",
+                                                       device_map="cuda",
+                                                       load_in_8bit=True,
+                                                       #offload_folder="offload",
                                                        trust_remote_code=True)
     print("finish loading models")
     

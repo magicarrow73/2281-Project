@@ -27,6 +27,7 @@ class KVCacheModel():
             assert self._prob_history is None, f"{self._prob_history.shape}"
             # the first forward (prefill) returns the prompt's logits
             outputs = self._model(input_ids)
+            #outputs = self._model(input_ids, use_cache=True) I thought of making this change but I am not sure it is correct
             self._prob_history = outputs.logits
             for i in range(self._prob_history.shape[-2]):   
                 self._prob_history[:, i, :] = norm_logits(self._prob_history[:, i, :], self._temperature, self._top_k, self._top_p)
