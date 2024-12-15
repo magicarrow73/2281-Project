@@ -3,14 +3,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LearnerModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim, L):
+    def __init__(self, input_dim, hidden_dim, L, num_layers, dropout):
         super(LearnerModel, self).__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, L)
+        self.layers = nn.ModuleList()
+        self.layers.append(nn.Linear(input_dim, hidden_dim))
+        for _ in range(num_layers - 1):
+            self.layers.append(nn.Linear(hidden_dim, hidden_dim))
+
+        self.output_layer = nn.Linear(hidden_dim, L)
+        self.dropout = nn.Dropout(dropout)
     def forward(self, x):
-        #x should be of dimension (batch, input_dim)
-        h = F.relu(self.fc1(x))
-        logits = self.fc2(h) #should be of dimension (batch, L)
+        for layer in self.layers:
+            x = layer(x)
+            x = F.relu(x)
+            x = self.dropout(x)
+        logits = self.output_layer(x)
         return logits
 
 def sample_drafter(learner_logits):

@@ -26,15 +26,7 @@ def get_distributions(drafters, target_model, input_ids):
 
 def train_learner_with_target(learner, drafter_indices, target_model, data_loader, ptfile, metric='kl', epochs=1, lr=1e-6):
     """
-    Train the Learner to pick a Drafter that best matches the target model's distribution.
-
-    Steps:
-    - For each batch:
-      - Compute q_v from target model
-      - Compute q_i from each Drafter
-      - Compute distance d_all = d(q_i, q_v) for each i
-      - Learner outputs L_dist = softmax(logits)
-      - Loss = E_{i ~ L_dist}[d(q_i, q_v)] = sum(L_dist * d_all)
+    Train the Learner using a pre-generated dataset.
     """
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     optimizer = optim.Adam(learner.parameters(), lr=lr)
@@ -44,8 +36,8 @@ def train_learner_with_target(learner, drafter_indices, target_model, data_loade
 
     epoch_losses = []
     training_data = torch.load(ptfile)
-    for epoch in range(epochs):
 
+    for epoch in range(epochs):
         running_loss = 0.0
         count = 0
 
@@ -59,20 +51,20 @@ def train_learner_with_target(learner, drafter_indices, target_model, data_loade
                 d_all = d["d_all"].to(device)
             else:
                 d_all = d["d_all"]
-                d_all = d_all[:, drafter_indices].to(device)
+                d_all = d_all[:, drafter_indices]
+            d_all = d_all.to(device)
             optimizer.zero_grad()
 
             #setting output_hidden_states=True returns all layer states
             with autocast():
-                for name, param in learner.named_parameters():
-                    if torch.isnan(param).any():
-                        print(f"NaN in parameter {name}")
-                    if torch.isinf(param).any():
-                        print(f"Inf in parameter {name}")
-
+                # for name, param in learner.named_parameters():
+                #     if torch.isnan(param).any():
+                #         print(f"NaN in parameter {name}")
+                #     if torch.isinf(param).any():
+                #         print(f"Inf in parameter {name}")
                 logits = learner(features)
-                if step % 100 == 0:
-                    print('d_all is', d_all, 'logits are', logits)
+                # if step % 100 == 0:
+                #     print('d_all is', d_all, 'logits are', logits)
                 L_dist = F.softmax(logits, dim=-1)
                 loss = torch.mean(torch.sum(L_dist * d_all, dim=-1))
 
@@ -89,7 +81,7 @@ def train_learner_with_target(learner, drafter_indices, target_model, data_loade
             running_loss += loss.item()
             count += 1
 
-            if step % 100 == 0 and step > 0:
+            if step % 1000 == 0 and step > 0:
                 avg_current_loss = running_loss / count
                 logging.info(f"Epoch {epoch+1}, Step {step}, Current Average Loss: {avg_current_loss:.4f}")
         
