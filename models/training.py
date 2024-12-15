@@ -2,6 +2,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 from models.metrics import compute_distance
+from tqdm import tqdm
 
 @torch.no_grad()
 def get_distributions(drafters, target_model, input_ids):
@@ -36,8 +37,16 @@ def train_learner_with_target(learner, drafters, target_model, data_loader, metr
     optimizer = optim.Adam(learner.parameters(), lr=lr)
     learner.train()
 
+    epoch_losses = []
+
     for epoch in range(epochs):
-        for input_ids, features in data_loader:
+
+        running_loss = 0.0
+        count = 0
+
+        print(f"\nStarting epoch {epoch+1}/{epochs}...")
+
+        for input_ids, features in tqdm(data_loader, desc=f"Epoch {epoch+1}"):
             input_ids = input_ids.cuda()
             features = features.cuda()
             optimizer.zero_grad()
@@ -65,4 +74,11 @@ def train_learner_with_target(learner, drafters, target_model, data_loader, metr
             loss.backward()
             optimizer.step()
 
-        print(f"Epoch {epoch}, Loss: {loss.item()}")
+            running_loss += loss.item()
+            count += 1
+        
+        avg_loss = running_loss / count
+        epoch_losses.append(avg_loss)
+        print(f"Epoch {epoch} completed with average loss {avg_loss}")
+
+    return epoch_losses

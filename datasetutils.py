@@ -21,8 +21,8 @@ class EnhancedFeatureDataset(Dataset):
 
     @torch.no_grad()
     def __getitem__(self, idx):
+        #get raw text then tokenize and pad
         text = self.texts[idx]
-
         ids = self.tokenizer.encode(text)
         ids = ids[:self.seq_len]
         ids = ids + [self.tokenizer.eos_token_id]*(self.seq_len - len(ids))
@@ -35,10 +35,10 @@ class EnhancedFeatureDataset(Dataset):
         hidden_states = outputs.hidden_states #tuple with layers+1 tensors and each has dimension (batch, seq_len, hidden_dim)
         last_hidden = hidden_states[-1]  #dimension (1, seq_len, hidden_dim)
 
-        # Average over seq_len to get a single vector for context
+        #average over seq_len to get a single vector for context
         avg_hidden = last_hidden.mean(dim=1)  #dimension (1, hidden_dim)
 
-        # Compute q_v distribution for the last token
+        #compute qv distribution for last token
         q_v = self.target_model.get_token_distribution(input_ids)  #dimension (1, vocab_size)
 
         entropy = -torch.sum(q_v * torch.log(q_v + 1e-9))

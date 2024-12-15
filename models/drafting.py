@@ -1,4 +1,4 @@
-from transformers input AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import torch.nn.functional as F
 
@@ -8,8 +8,8 @@ class ModelWrapper:
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.float16,
-            device_map='auto',
             load_in_8bit=True,
+            device_map="auto",
             trust_remote_code=True
         )
     def get_token_distribution(self, input_ids):
