@@ -3,12 +3,17 @@ import argparse
 import contexttimer
 from colorama import Fore, Style
 from transformers import AutoTokenizer, AutoModelForCausalLM
+import os
 
 from sampling import autoregressive_sampling, speculative_sampling, speculative_sampling_v2
 from globals import Decoder
 
-
-
+from models.learner import LearnerModel, sample_drafter
+from models.drafting import ModelWrapper
+from models.training import train_learner_with_target, get_distributions
+from torch.utils.data import Dataset, DataLoader
+from datasets-utils import EnhancedFeatureDataset, collate_fn
+from datetime import datetime
 
 # my local models
 MODELZOO = {
@@ -37,6 +42,12 @@ def parse_arguments():
     parser.add_argument('--profiling', '-p', action='store_true', default=False, help='collect torch profiler results.')
     parser.add_argument('--max_tokens', '-M', type=int, default=20, help='max token number generated.')
     parser.add_argument('--gamma', '-g', type=int, default=4, help='guess time.')
+
+    parser.add_argument('--mode', type=str, default='decode', choices=['decode', 'train_learner'], help='Choose mode: decode or train_learner')
+    parser.add_argument('--epochs', type=int, default=1, help='Number of epochs for learner training')
+    parser.add_argument('--batch_size', type=int, default=2, help='Batch size for learner training')
+    parser.add_argument('--metric', type=str, default='kl', choices=['kl','l2'], help='Distance metric for learner')
+
     args = parser.parse_args()
     return args
 
@@ -132,6 +143,41 @@ def generate(input_text, approx_model_name, target_model_name, num_tokens=20, ga
 
 if __name__ == "__main__":
     args = parse_arguments()
+
+    torch.manual_seed(123)
+    torch.cuda_manual_seed_all(123)
     
-    generate(args.input, args.approx_model_name, args.target_model_name, num_tokens=args.max_tokens, gamma=args.gamma,
-             random_seed = args.seed, verbose=args.verbose, use_benchmark = args.benchmark)
+    if args.mode == 'decode':
+        generate(args.input, args.approx_model_name, args.target_model_name, num_tokens=args.max_tokens, gamma=args.gamma,
+                random_seed = args.seed, verbose=args.verbose, use_benchmark = args.benchmark)
+
+    elif args.mode == 'train_learner':
+        target_model = ModelWrapper(args.target_model_name)
+        
+        #specify the drafters, should change this later
+        drafters = [
+            ModelWrapper(MODELZOO["llama2-7b"]),
+            ModelWrapper(MODELZOO["llama2-7b"])
+        ]
+        L = len(drafters)
+
+        tokenizer = target_model.tokenizer
+
+        #need a dataset, assume that we have some directory called data and some file with one context per line
+        data_file = "data/train.txt"
+        if not os.path.exists(data_file):
+            raise FileNotFoundError(f"{data_file} not found, please specify a dataset")
+        texts = open(data_file, 'r').read().splitlines()
+        
+        dataset = EnhancedFeatureDataset(tokenizer, target_model, texts, seq_len=128)
+        data_loader = DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=collate_fn)
+
+        #create and train Learner then save it afterward with a timestamp
+        learner = LearnerModel(input_dim=1, hidden_dim=32, L=L).cuda()
+        train_learner_with_target(learner, drafters, target_model, data_loader, 
+                                  metric=args.metric, epochs=args.epochs)
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"checkpoints/learner_{timestamp}.pt"
+        torch.save(learner.state_dict(), filename)
+        print(f"Learner has finished training and the model was saved to {filename}")
