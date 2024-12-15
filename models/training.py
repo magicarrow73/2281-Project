@@ -42,55 +42,23 @@ def train_learner_with_target(learner, drafters, target_model, data_loader, metr
     scaler = GradScaler()
 
     epoch_losses = []
-
+    training_data = torch.load('training_data.pt')
     for epoch in range(epochs):
 
         running_loss = 0.0
         count = 0
 
         print(f"\nStarting epoch {epoch+1}/{epochs}...")
-
-        for step, input_ids in enumerate(data_loader):
+        data = training_data[epoch]
+        for step, d in enumerate(data):
             if step % 100 == 0:
                 logging.info(f"Processed {step} batches")
-
-            #run target model with hidden states
-            input_ids = input_ids.to(device)
+            features = d["features"].to(device)
+            d_all = d["d_all"].to(device)
             optimizer.zero_grad()
 
             #setting output_hidden_states=True returns all layer states
             with autocast():
-                outputs = target_model.model(input_ids, output_hidden_states=True)
-                last_hidden = outputs.hidden_states[-1]
-                avg_hidden = last_hidden.mean(dim=1)
-
-                #compute qv distribution for last token
-                q_v_target = target_model.get_token_distribution(input_ids)
-                q_v_target = q_v_target.clamp_min(5e-8)
-
-                if step % 100 == 0:
-                    print('qv target min is', q_v_target.min(), 'qv target max is', q_v_target.max())
-
-                entropy = -torch.sum(q_v_target * torch.log(q_v_target + 1e-6), dim=-1, keepdim=True)
-                features = torch.cat([avg_hidden, entropy], dim=-1)
-                #features = features.half()
-
-                #get the distributions
-                q_v, q_i_list = get_distributions(drafters, target_model, input_ids)
-                #q_v = q_v.to(device)
-                #q_i_list = q_i_list.to(device)
-
-                #distance for each drafter
-                #d_all should contain the distances for all of the drafters, and we flatten to run faster
-                batch_size, L, vocab_size = q_i_list.size()
-                q_v_expanded = q_v.unsqueeze(1).expand_as(q_i_list) #dimension (batch, L, vocab_size)
-                d_all = compute_distance(
-                    q_i_list.reshape(-1, vocab_size),
-                    q_v_expanded.reshape(-1, vocab_size),
-                    metric=metric
-                )
-                d_all = d_all.reshape(batch_size, L) #dimension (batch, L), reshaped from flattened state
-
                 for name, param in learner.named_parameters():
                     if torch.isnan(param).any():
                         print(f"NaN in parameter {name}")
@@ -125,3 +93,60 @@ def train_learner_with_target(learner, drafters, target_model, data_loader, metr
         print(f"Epoch {epoch+1} completed with average loss {avg_loss}")
 
     return epoch_losses
+
+def sample_training_data(drafters, target_model, data_loader, metric='kl', epochs=1, lr=1e-4):
+    """
+    Train the Learner to pick a Drafter that best matches the target model's distribution.
+
+    Steps:
+    - For each batch:
+      - Compute q_v from target model
+      - Compute q_i from each Drafter
+      - Compute distance d_all = d(q_i, q_v) for each i
+      - Learner outputs L_dist = softmax(logits)
+      - Loss = E_{i ~ L_dist}[d(q_i, q_v)] = sum(L_dist * d_all)
+    """
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    cpu = torch.device("cpu")
+    training_data = []
+
+    for epoch in range(epochs):
+        print(f"\nStarting epoch {epoch+1}/{epochs}...")
+
+        data = []
+        
+        for step, input_ids in enumerate(data_loader):
+            if step > 100:
+                break
+            if step % 100 == 0:
+                logging.info(f"Processed {step} batches")
+
+            #run target model with hidden states
+            input_ids = input_ids.to(device)
+
+            #setting output_hidden_states=True returns all layer states
+            outputs = target_model.model(input_ids, output_hidden_states=True)
+            last_hidden = outputs.hidden_states[-1]
+            avg_hidden = last_hidden.mean(dim=1)
+
+            #compute qv distribution for last token
+            q_v_target = target_model.get_token_distribution(input_ids)
+            entropy = -torch.sum(q_v_target * torch.log(q_v_target + 1e-6), dim=-1, keepdim=True)
+            features = torch.cat([avg_hidden, entropy], dim=-1).detach().to(cpu)
+            q_v, q_i_list = get_distributions(drafters, target_model, input_ids)
+            batch_size, L, vocab_size = q_i_list.size()
+            #features = features.half()
+            q_v_expanded = q_v.unsqueeze(1).expand_as(q_i_list) 
+            d_all = compute_distance(
+                q_i_list.reshape(-1, vocab_size),
+                q_v_expanded.reshape(-1, vocab_size),
+                metric=metric
+            )
+            d_all = d_all.reshape(batch_size, L).detach().to(cpu) #dimension (batch, L), reshaped from flattened state
+            data.append({"features": features, "d_all": d_all})
+        training_data.append(data)
+    torch.save(training_data, 'training_data.pt')
+    return training_data
+
+# def serialize_data():
+#     for 
