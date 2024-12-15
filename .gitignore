@@ -1,2 +1,7 @@
 *__pycache__*
+#Ignore learner checkpoints directory
+learner-checkpoints/
+
+#Ignore logs directory
+logs/
 *.pt*
