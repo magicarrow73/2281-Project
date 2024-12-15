@@ -30,5 +30,5 @@ cd /n/holylfs06/LABS/kempner_fellow_emalach/Lab/rli/2281-Project
 #export SPECIAL_TOKEN="<|sep|>"
 
 #run the finetuning script
-#python main.py --mode train_learner --epochs 10 --batch_size 16
-accelerate launch main.py --mode train_learner --epochs 10 --batch_size 16
+python main.py --mode train_learner --epochs 10 --batch_size 16
+#accelerate launch main.py --mode train_learner --epochs 10 --batch_size 16
