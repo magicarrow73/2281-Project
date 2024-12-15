@@ -195,7 +195,8 @@ if __name__ == "__main__":
 
         #create and train Learner then save it afterward with a timestamp
         #learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).cuda() #llama-7b uses hidden_dim 4096
-        learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).to(device).half() #bloom-7bm uses hidden_dim 4096
+        #learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).to(device).half() #bloom-7bm uses hidden_dim 4096
+        learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).to(device)
         #learner.half()
 
         #accelerator = Accelerator()
