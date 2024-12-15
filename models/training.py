@@ -21,9 +21,10 @@ def get_distributions(drafters, target_model, input_ids):
         q_i = d.get_token_distribution(input_ids)
         drafter_probs.append(q_i) #each q_i has dimension (batch, vocab_size)
     q_i_list = torch.stack(drafter_probs, dim=1) #dimension (batch, L, vocab_size)
+    assert q_i_list.shape[2] == q_v.shape[1]
     return q_v, q_i_list
 
-def train_learner_with_target(learner, drafters, target_model, data_loader, metric='kl', epochs=1, lr=1e-6):
+def train_learner_with_target(learner, drafter_indices, target_model, data_loader, ptfile, metric='kl', epochs=1, lr=1e-6):
     """
     Train the Learner to pick a Drafter that best matches the target model's distribution.
 
@@ -42,7 +43,7 @@ def train_learner_with_target(learner, drafters, target_model, data_loader, metr
     scaler = GradScaler()
 
     epoch_losses = []
-    training_data = torch.load('training_data.pt')
+    training_data = torch.load(ptfile)
     for epoch in range(epochs):
 
         running_loss = 0.0
@@ -54,7 +55,11 @@ def train_learner_with_target(learner, drafters, target_model, data_loader, metr
             if step % 100 == 0:
                 logging.info(f"Processed {step} batches")
             features = d["features"].to(device)
-            d_all = d["d_all"].to(device)
+            if drafter_indices == None:
+                d_all = d["d_all"].to(device)
+            else:
+                d_all = d["d_all"]
+                d_all = d_all[:, drafter_indices].to(device)
             optimizer.zero_grad()
 
             #setting output_hidden_states=True returns all layer states
@@ -94,7 +99,7 @@ def train_learner_with_target(learner, drafters, target_model, data_loader, metr
 
     return epoch_losses
 
-def sample_training_data(drafters, target_model, data_loader, metric='kl', epochs=1, lr=1e-4):
+def sample_training_data(drafters, target_model, data_loader, metric='kl', epochs=1, lr=1e-4, output="training_data.pt"):
     """
     Train the Learner to pick a Drafter that best matches the target model's distribution.
 
@@ -116,8 +121,6 @@ def sample_training_data(drafters, target_model, data_loader, metric='kl', epoch
         data = []
         
         for step, input_ids in enumerate(data_loader):
-            if step > 100:
-                break
             if step % 100 == 0:
                 logging.info(f"Processed {step} batches")
 
@@ -145,7 +148,7 @@ def sample_training_data(drafters, target_model, data_loader, metric='kl', epoch
             d_all = d_all.reshape(batch_size, L).detach().to(cpu) #dimension (batch, L), reshaped from flattened state
             data.append({"features": features, "d_all": d_all})
         training_data.append(data)
-    torch.save(training_data, 'training_data.pt')
+    torch.save(training_data, output)
     return training_data
 
 # def serialize_data():
