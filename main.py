@@ -174,6 +174,11 @@ if __name__ == "__main__":
         if drafter_indices != None:
             drafter_indices = [int(d) for d in drafter_indices]
         #specify the drafters, should change this later
+        drafters = [
+            ModelWrapper('bigscience/bloom-560m'),
+            ModelWrapper('bigscience/bloom-1b7')
+        ]
+        L = len(drafters)
         if drafter_indices != None:
             L = len(drafter_indices)
         else:
@@ -200,7 +205,7 @@ if __name__ == "__main__":
         #create and train Learner then save it afterward with a timestamp
         #learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).cuda() #llama-7b uses hidden_dim 4096
         #learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).to(device).half() #bloom-7bm uses hidden_dim 4096
-        learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).to(device)
+        learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L, num_layers=3, dropout=0.2).to(device)
         #learner.half()
 
         #accelerator = Accelerator()
