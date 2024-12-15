@@ -169,7 +169,7 @@ if __name__ == "__main__":
         # data_file = "data/train.txt"
         # if not os.path.exists(data_file):
         #     raise FileNotFoundError(f"{data_file} not found, please specify a dataset")
-        raw_dataset = load_dataset("wikitext", "wikitext-103-raw-v1")
+        raw_dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
         texts = [item["text"] for item in raw_dataset["train"] if item["text"].strip() != ""]
         #texts = open(data_file, 'r').read().splitlines() #uncomment if we are loading in a dataset
         
@@ -178,6 +178,7 @@ if __name__ == "__main__":
 
         #create and train Learner then save it afterward with a timestamp
         learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).cuda() #llama-7b uses hidden_dim 4096
+        learner.half()
         epoch_losses = train_learner_with_target(learner, drafters, target_model, data_loader, 
                                   metric=args.metric, epochs=args.epochs)
 

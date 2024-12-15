@@ -42,10 +42,13 @@ class EnhancedFeatureDataset(Dataset):
         q_v = self.target_model.get_token_distribution(input_ids)  #dimension (1, vocab_size)
 
         entropy = -torch.sum(q_v * torch.log(q_v + 1e-9))
+        entropy = entropy.unsqueeze(0)
+        entropy = entropy.unsqueeze(1)
 
         #combine avg_hidden and entropy into one feature vector
-        features = torch.cat([avg_hidden, entropy.unsqueeze(0)], dim=-1)  #dimension (1, hidden_dim+1)
-
+        features = torch.cat([avg_hidden, entropy], dim=-1)  #dimension (1, hidden_dim+1)
+        features = features.half()
+        
         #returns (input_ids, features)
         #originally the first has dimension (1, seq_len) and I squeeze to (seq_len,)
         #originally the second has dimension (1, hidden_dim+1) and I squeeze to (hidden_dim+1,)
