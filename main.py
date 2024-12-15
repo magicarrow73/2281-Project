@@ -178,6 +178,11 @@ if __name__ == "__main__":
 
         L = len(drafter_indices)
         learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L, num_layers=3, dropout=0.2).to(device)
+        model_name_parts = args.target_model_name.split('/')
+        model_family = model_name_parts[0] if len(model_name_parts) > 1 else args.target_model_name
+        model_family = model_family.lower().split('-')[0]
+        drafter_indices_str = ",".join(map(str, drafter_indices))
+
         epoch_losses = train_learner_with_target(learner, drafter_indices, None, None, ptfile=args.ptfile,
                                                  metric=args.metric, epochs=args.epochs)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -185,7 +190,7 @@ if __name__ == "__main__":
         torch.save(learner.state_dict(), filename)
         print(f"Learner has finished training and the model was saved to {filename}")
 
-        loss_filename = f"learner-checkpoints/learner_losses_{timestamp}.csv"
+        loss_filename = f"learner-checkpoints/{model_family}-{drafter_indices_str}-{args.metric}-{timestamp}-losses.csv"
         with open(loss_filename, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(["epoch", "loss"])
