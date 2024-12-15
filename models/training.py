@@ -61,12 +61,12 @@ def train_learner_with_target(learner, drafters, target_model, data_loader, metr
             batch_size, L, vocab_size = q_i_list.size()
             q_v_expanded = q_v.unsqueeze(1).expand_as(q_i_list) #dimension (batch, L, vocab_size)
             d_all = compute_distance(
-                q_i_list.view(-1, vocab_size),
-                q_v_expanded.view(-1, vocab_size),
+                q_i_list.reshape(-1, vocab_size),
+                q_v_expanded.reshape(-1, vocab_size),
                 metric=metric
             )
-            d_all = d_all.view(batch_size, L) #dimension (batch, L), reshaped from flattened state
-            logits = learner(features) #dimension (batch, L)
+            d_all = d_all.reshape(batch_size, L) #dimension (batch, L), reshaped from flattened state
+            logits = learner(features.half()) #dimension (batch, L)
             L_dist = F.softmax(logits, dim=-1) #dimension (batch, L)
 
             #take the loss averaged over the batch
