@@ -13,7 +13,7 @@ from globals import Decoder
 
 from models.learner import LearnerModel, sample_drafter
 from models.drafting import ModelWrapper
-from models.training import train_learner_with_target, get_distributions
+from models.training import train_learner_with_target, get_distributions, sample_training_data
 from torch.utils.data import Dataset, DataLoader
 from datasetutils import EnhancedFeatureDataset, collate_fn
 from datetime import datetime
@@ -55,7 +55,7 @@ def parse_arguments():
     parser.add_argument('--max_tokens', '-M', type=int, default=20, help='max token number generated.')
     parser.add_argument('--gamma', '-g', type=int, default=4, help='guess time.')
 
-    parser.add_argument('--mode', type=str, default='decode', choices=['decode', 'train_learner'], help='Choose mode: decode or train_learner')
+    parser.add_argument('--mode', type=str, default='decode', choices=['decode', 'train_learner', 'create_dataset'], help='Choose mode: decode, train_learner, or create_dataset')
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs for learner training')
     parser.add_argument('--batch_size', type=int, default=4, help='Batch size for learner training')
     parser.add_argument('--metric', type=str, default='kl', choices=['kl','l2'], help='Distance metric for learner')
@@ -216,3 +216,44 @@ if __name__ == "__main__":
             for epoch_i, loss_val in enumerate(epoch_losses):
                 writer.writerow([epoch_i, loss_val])
         print(f"Losses saved to {loss_filename}")
+    elif args.mode == 'create_dataset':
+        #change to use target model name
+        target_model = ModelWrapper(args.target_model_name)
+
+        #specify the drafters, should change this later
+        drafters = [
+            ModelWrapper('bigscience/bloom-560m'),
+            ModelWrapper('bigscience/bloom-560m')
+        ]
+        L = len(drafters)
+
+        #no need for this because apparently the model is already set to the correct devices according to some stack trace that I got
+        # target_model.model.to(device)
+        # for d in drafters:
+        #     d.model.to(device)
+
+        tokenizer = target_model.tokenizer
+
+        #need a dataset, assume that we have some directory called data and some file with one context per line
+        # data_file = "data/train.txt"
+        # if not os.path.exists(data_file):
+        #     raise FileNotFoundError(f"{data_file} not found, please specify a dataset")
+        raw_dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
+        texts = [item["text"] for item in raw_dataset["train"] if item["text"].strip() != ""]
+        #texts = open(data_file, 'r').read().splitlines() #uncomment if we are loading in a dataset
+        
+        dataset = EnhancedFeatureDataset(tokenizer, target_model, texts, seq_len=128)
+        data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=0)
+
+        #create and train Learner then save it afterward with a timestamp
+        #learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).cuda() #llama-7b uses hidden_dim 4096
+        learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).to(device).half() #bloom-7bm uses hidden_dim 4096
+        
+        #learner.half()
+
+        #accelerator = Accelerator()
+        #learner, drafters, target_model, data_loader = accelerator.prepare(learner, drafters, target_model, data_loader)
+
+        epoch_losses = sample_training_data( drafters, target_model, data_loader, 
+                                  metric=args.metric, epochs=args.epochs)
+    

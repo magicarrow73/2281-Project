@@ -5,8 +5,8 @@ set -e
 ENV_NAME=2281-project-env
 REQUIREMENTS_FILE=requirements.txt
 
-conda create -n "$ENV_NAME" python=3.9 -y
-conda activate "$ENV_NAME"
+mamba create -n "$ENV_NAME" python=3.9 -y
+mamba activate "$ENV_NAME"
 
 pip install -r "$REQUIREMENTS_FILE"
 pip install accelerate
