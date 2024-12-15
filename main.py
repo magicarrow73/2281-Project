@@ -4,9 +4,12 @@ import contexttimer
 from colorama import Fore, Style
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import os
+import logging
+import sys
 
 from sampling import autoregressive_sampling, speculative_sampling, speculative_sampling_v2
 from globals import Decoder
+from accelerate import Accelerator
 
 from models.learner import LearnerModel, sample_drafter
 from models.drafting import ModelWrapper
@@ -16,6 +19,12 @@ from datasetutils import EnhancedFeatureDataset, collate_fn
 from datetime import datetime
 from datasets import load_dataset
 import csv
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 
 # my local models
 MODELZOO = {
@@ -174,11 +183,15 @@ if __name__ == "__main__":
         #texts = open(data_file, 'r').read().splitlines() #uncomment if we are loading in a dataset
         
         dataset = EnhancedFeatureDataset(tokenizer, target_model, texts, seq_len=128)
-        data_loader = DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=collate_fn)
+        data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=8, pin_memory=True)
 
         #create and train Learner then save it afterward with a timestamp
         learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).cuda() #llama-7b uses hidden_dim 4096
         learner.half()
+
+        accelerator = Accelerator()
+        learner, drafters, target_model, data_loader = accelerator.prepare(learner, drafters, target_model, data_loader)
+
         epoch_losses = train_learner_with_target(learner, drafters, target_model, data_loader, 
                                   metric=args.metric, epochs=args.epochs)
 

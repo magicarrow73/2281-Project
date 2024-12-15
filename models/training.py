@@ -46,7 +46,9 @@ def train_learner_with_target(learner, drafters, target_model, data_loader, metr
 
         print(f"\nStarting epoch {epoch+1}/{epochs}...")
 
-        for input_ids, features in tqdm(data_loader, desc=f"Epoch {epoch+1}"):
+        for step, (input_ids, features) in enumerate(data_loader):
+            if step % 100 == 0:
+                logging.info(f"Processed {step} batches")
             input_ids = input_ids.cuda()
             features = features.cuda()
             optimizer.zero_grad()
