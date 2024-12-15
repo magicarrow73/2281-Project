@@ -8,7 +8,7 @@ class ModelWrapper:
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.float16,
-            load_in_8bit=True,
+            #load_in_8bit=True,
             device_map="auto",
             trust_remote_code=True
         )

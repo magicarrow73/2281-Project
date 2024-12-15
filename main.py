@@ -9,7 +9,7 @@ import sys
 
 from sampling import autoregressive_sampling, speculative_sampling, speculative_sampling_v2
 from globals import Decoder
-from accelerate import Accelerator
+#from accelerate import Accelerator
 
 from models.learner import LearnerModel, sample_drafter
 from models.drafting import ModelWrapper
@@ -19,6 +19,7 @@ from datasetutils import EnhancedFeatureDataset, collate_fn
 from datetime import datetime
 from datasets import load_dataset
 import csv
+#import torch.multiprocessing as mp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -103,14 +104,14 @@ def generate(input_text, approx_model_name, target_model_name, num_tokens=20, ga
                                                        torch_dtype=torch.float16,
                                                        #device_map="auto",
                                                        device_map="cuda",
-                                                       load_in_8bit=True,
+                                                       #load_in_8bit=True,
                                                        #offload_folder="offload",
                                                        trust_remote_code=True)
     large_model = AutoModelForCausalLM.from_pretrained(target_model_name, 
                                                        torch_dtype=torch.float16,
                                                        #device_map="auto",
                                                        device_map="cuda",
-                                                       load_in_8bit=True,
+                                                       #load_in_8bit=True,
                                                        #offload_folder="offload",
                                                        trust_remote_code=True)
     print("finish loading models")
@@ -153,9 +154,11 @@ def generate(input_text, approx_model_name, target_model_name, num_tokens=20, ga
                   input_ids, small_model, large_model, max_len = num_tokens, gamma = gamma, top_k = top_k, top_p=top_p, random_seed = random_seed)
 
 if __name__ == "__main__":
+    #mp.set_start_method('spawn', force=True)
     args = parse_arguments()
 
     torch.manual_seed(123)
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     if args.mode == 'decode':
         generate(args.input, args.approx_model_name, args.target_model_name, num_tokens=args.max_tokens, gamma=args.gamma,
@@ -164,13 +167,18 @@ if __name__ == "__main__":
     elif args.mode == 'train_learner':
         #change to use target model name
         target_model = ModelWrapper(args.target_model_name)
-        
+
         #specify the drafters, should change this later
         drafters = [
             ModelWrapper('bigscience/bloom-560m'),
             ModelWrapper('bigscience/bloom-560m')
         ]
         L = len(drafters)
+
+        #no need for this because apparently the model is already set to the correct devices according to some stack trace that I got
+        # target_model.model.to(device)
+        # for d in drafters:
+        #     d.model.to(device)
 
         tokenizer = target_model.tokenizer
 
@@ -183,14 +191,15 @@ if __name__ == "__main__":
         #texts = open(data_file, 'r').read().splitlines() #uncomment if we are loading in a dataset
         
         dataset = EnhancedFeatureDataset(tokenizer, target_model, texts, seq_len=128)
-        data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=8, pin_memory=True)
+        data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=0)
 
         #create and train Learner then save it afterward with a timestamp
-        learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).cuda() #llama-7b uses hidden_dim 4096
-        learner.half()
+        #learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).cuda() #llama-7b uses hidden_dim 4096
+        learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).to(device).half() #bloom-7bm uses hidden_dim 4096
+        #learner.half()
 
-        accelerator = Accelerator()
-        learner, drafters, target_model, data_loader = accelerator.prepare(learner, drafters, target_model, data_loader)
+        #accelerator = Accelerator()
+        #learner, drafters, target_model, data_loader = accelerator.prepare(learner, drafters, target_model, data_loader)
 
         epoch_losses = train_learner_with_target(learner, drafters, target_model, data_loader, 
                                   metric=args.metric, epochs=args.epochs)

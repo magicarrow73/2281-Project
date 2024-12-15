@@ -1,7 +1,7 @@
 import torch
 
 def kl_divergence(p, q):
-    return torch.sum(p * (torch.log(p + 1e-9) - torch.log(q + 1e-9)), dim=-1)
+    return torch.sum(p * (torch.log(p + 1e-6) - torch.log(q + 1e-6)), dim=-1)
 
 def l2_distance(p, q):
     return torch.sqrt(torch.sum((p - q)**2, dim=-1))
