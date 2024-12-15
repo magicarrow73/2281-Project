@@ -56,6 +56,9 @@ def parse_arguments():
     parser.add_argument('--gamma', '-g', type=int, default=4, help='guess time.')
 
     parser.add_argument('--mode', type=str, default='decode', choices=['decode', 'train_learner', 'create_dataset'], help='Choose mode: decode, train_learner, or create_dataset')
+    parser.add_argument('--drafters', nargs='*', help='List of drafters', required=False)
+    parser.add_argument('--drafters_idx', nargs="*", help='List of drafter indices for training', required = False)
+    parser.add_argument('--ptfile', type=str, help='ptfile', required=False)
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs for learner training')
     parser.add_argument('--batch_size', type=int, default=4, help='Batch size for learner training')
     parser.add_argument('--metric', type=str, default='kl', choices=['kl','l2'], help='Distance metric for learner')
@@ -167,13 +170,14 @@ if __name__ == "__main__":
     elif args.mode == 'train_learner':
         #change to use target model name
         target_model = ModelWrapper(args.target_model_name)
-
+        drafter_indices = args.drafters_idx
+        if drafter_indices != None:
+            drafter_indices = [int(d) for d in drafter_indices]
         #specify the drafters, should change this later
-        drafters = [
-            ModelWrapper('bigscience/bloom-560m'),
-            ModelWrapper('bigscience/bloom-560m')
-        ]
-        L = len(drafters)
+        if drafter_indices != None:
+            L = len(drafter_indices)
+        else:
+            assert False
 
         #no need for this because apparently the model is already set to the correct devices according to some stack trace that I got
         # target_model.model.to(device)
@@ -202,7 +206,7 @@ if __name__ == "__main__":
         #accelerator = Accelerator()
         #learner, drafters, target_model, data_loader = accelerator.prepare(learner, drafters, target_model, data_loader)
 
-        epoch_losses = train_learner_with_target(learner, drafters, target_model, data_loader, 
+        epoch_losses = train_learner_with_target(learner, drafter_indices, target_model, data_loader, ptfile=args.ptfile,
                                   metric=args.metric, epochs=args.epochs)
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -222,10 +226,8 @@ if __name__ == "__main__":
         target_model = ModelWrapper(args.target_model_name)
 
         #specify the drafters, should change this later
-        drafters = [
-            ModelWrapper('bigscience/bloom-560m'),
-            ModelWrapper('bigscience/bloom-560m')
-        ]
+        drafters = args.drafters
+        drafters = [ModelWrapper(m) for m in drafters]
         L = len(drafters)
 
         #no need for this because apparently the model is already set to the correct devices according to some stack trace that I got
@@ -254,7 +256,6 @@ if __name__ == "__main__":
 
         #accelerator = Accelerator()
         #learner, drafters, target_model, data_loader = accelerator.prepare(learner, drafters, target_model, data_loader)
-
-        epoch_losses = sample_training_data( drafters, target_model, data_loader, 
-                                  metric=args.metric, epochs=args.epochs)
-    
+        print(args.ptfile)
+        sample_training_data(drafters, target_model, data_loader, 
+                                  metric=args.metric, epochs=args.epochs, output=args.ptfile)
