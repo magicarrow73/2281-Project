@@ -14,6 +14,7 @@ pip install --upgrade --force-reinstall "numpy<2.0"
 pip install --upgrade torch --index-url https://download.pytorch.org/whl/cu118
 pip install sentencepiece
 pip install bitsandbytes
+pip install datasets
 
 #huggingface token for llama
 pip install huggingface_hub
