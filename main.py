@@ -104,14 +104,14 @@ def generate(input_text, approx_model_name, target_model_name, num_tokens=20, ga
                                                        torch_dtype=torch.float16,
                                                        #device_map="auto",
                                                        device_map="cuda",
-                                                       load_in_8bit=True,
+                                                       #load_in_8bit=True,
                                                        #offload_folder="offload",
                                                        trust_remote_code=True)
     large_model = AutoModelForCausalLM.from_pretrained(target_model_name, 
                                                        torch_dtype=torch.float16,
                                                        #device_map="auto",
                                                        device_map="cuda",
-                                                       load_in_8bit=True,
+                                                       #load_in_8bit=True,
                                                        #offload_folder="offload",
                                                        trust_remote_code=True)
     print("finish loading models")
@@ -195,8 +195,8 @@ if __name__ == "__main__":
 
         #create and train Learner then save it afterward with a timestamp
         #learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).cuda() #llama-7b uses hidden_dim 4096
-        learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).to(device) #bloom-7bm uses hidden_dim 4096
-        learner.half()
+        learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).to(device).half() #bloom-7bm uses hidden_dim 4096
+        #learner.half()
 
         #accelerator = Accelerator()
         #learner, drafters, target_model, data_loader = accelerator.prepare(learner, drafters, target_model, data_loader)

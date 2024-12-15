@@ -63,7 +63,7 @@ def train_learner_with_target(learner, drafters, target_model, data_loader, metr
             q_v_target = target_model.get_token_distribution(input_ids)
             entropy = -torch.sum(q_v_target * torch.log(q_v_target + 1e-6), dim=-1, keepdim=True)
             features = torch.cat([avg_hidden, entropy], dim=-1)
-            features = features.half()
+            #features = features.half()
 
             optimizer.zero_grad()
 
