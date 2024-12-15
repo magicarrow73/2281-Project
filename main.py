@@ -56,6 +56,9 @@ def parse_arguments():
     parser.add_argument('--gamma', '-g', type=int, default=4, help='guess time.')
 
     parser.add_argument('--mode', type=str, default='decode', choices=['decode', 'train_learner'], help='Choose mode: decode or train_learner')
+    parser.add_argument('--drafters', nargs='*', help='List of drafters', required=False)
+    parser.add_argument('--drafters_idx', nargs="*", help='List of drafter indices for training', required = False)
+    parser.add_argument('--ptfile', type=str, help='ptfile', required=False)
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs for learner training')
     parser.add_argument('--batch_size', type=int, default=4, help='Batch size for learner training')
     parser.add_argument('--metric', type=str, default='kl', choices=['kl','l2'], help='Distance metric for learner')
@@ -171,7 +174,7 @@ if __name__ == "__main__":
         #specify the drafters, should change this later
         drafters = [
             ModelWrapper('bigscience/bloom-560m'),
-            ModelWrapper('bigscience/bloom-560m')
+            ModelWrapper('bigscience/bloom-1b7')
         ]
         L = len(drafters)
 
@@ -196,7 +199,7 @@ if __name__ == "__main__":
         #create and train Learner then save it afterward with a timestamp
         #learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).cuda() #llama-7b uses hidden_dim 4096
         #learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).to(device).half() #bloom-7bm uses hidden_dim 4096
-        learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L).to(device)
+        learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L, num_layers=3, dropout=0.2).to(device)
         #learner.half()
 
         #accelerator = Accelerator()
