@@ -5,3 +5,6 @@ learner-checkpoints/
 #Ignore logs directory
 logs/
 *.pt*
+
+#Ignore data directory
+data/
