@@ -57,6 +57,7 @@ def parse_arguments():
 
     parser.add_argument('--mode', type=str, default='decode', choices=['decode', 'train_learner', 'create_dataset'], help='Choose mode: decode, train_learner, or create_dataset')
     parser.add_argument('--drafters', nargs='*', help='List of drafters', required=False)
+    parser.add_argument('--sizes', nargs='*', help='List of size', required=False)
     parser.add_argument('--drafters_idx', nargs="*", help='List of drafter indices for training', required = False)
     parser.add_argument('--ptfile', type=str, help='ptfile', required=False)
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs for learner training')
@@ -204,6 +205,8 @@ if __name__ == "__main__":
         drafters = args.drafters
         drafters = [ModelWrapper(m) for m in drafters]
         L = len(drafters)
+        sizes = args.sizes
+        sizes = [float(s) for s in sizes]
 
         tokenizer = target_model.tokenizer
         raw_dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
@@ -212,5 +215,5 @@ if __name__ == "__main__":
         dataset = EnhancedFeatureDataset(tokenizer, target_model, texts, seq_len=128)
         data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=0)
 
-        sample_training_data(drafters, target_model, data_loader, metric=args.metric, epochs=args.epochs, output=args.ptfile)
+        sample_training_data(drafters, target_model, data_loader, metric=args.metric, epochs=args.epochs, output=args.ptfile, sizes=sizes)
         print(f"Offline dataset saved to {args.ptfile}")

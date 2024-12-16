@@ -91,7 +91,7 @@ def train_learner_with_target(learner, drafter_indices, target_model, data_loade
 
     return epoch_losses
 
-def sample_training_data(drafters, target_model, data_loader, metric='kl', epochs=1, lr=1e-4, output="training_data.pt"):
+def sample_training_data(drafters, target_model, data_loader, metric='kl', epochs=1, lr=1e-4, output="training_data.pt", sizes = None):
     """
     Train the Learner to pick a Drafter that best matches the target model's distribution.
 
@@ -106,7 +106,6 @@ def sample_training_data(drafters, target_model, data_loader, metric='kl', epoch
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     cpu = torch.device("cpu")
     training_data = []
-
     for epoch in range(epochs):
         print(f"\nStarting epoch {epoch+1}/{epochs}...")
 
@@ -130,6 +129,11 @@ def sample_training_data(drafters, target_model, data_loader, metric='kl', epoch
             features = torch.cat([avg_hidden, entropy], dim=-1).detach().to(cpu)
             q_v, q_i_list = get_distributions(drafters, target_model, input_ids)
             batch_size, L, vocab_size = q_i_list.size()
+            if sizes == None:
+                assert False
+            assert len(sizes) == L
+            sizes = torch.tensor(sizes)
+            sizes = sizes.reshape(1, -1)
             #features = features.half()
             q_v_expanded = q_v.unsqueeze(1).expand_as(q_i_list) 
             d_all = compute_distance(
@@ -138,6 +142,8 @@ def sample_training_data(drafters, target_model, data_loader, metric='kl', epoch
                 metric=metric
             )
             d_all = d_all.reshape(batch_size, L).detach().to(cpu) #dimension (batch, L), reshaped from flattened state
+            d_all = d_all * sizes
+            d_all = d_all.detach()
             data.append({"features": features, "d_all": d_all})
         training_data.append(data)
     torch.save(training_data, output)
