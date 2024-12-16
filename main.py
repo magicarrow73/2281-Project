@@ -61,7 +61,8 @@ def parse_arguments():
     parser.add_argument('--ptfile', type=str, help='ptfile', required=False)
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs for learner training')
     parser.add_argument('--batch_size', type=int, default=4, help='Batch size for learner training')
-    parser.add_argument('--metric', type=str, default='kl', choices=['kl','l2', 'chi_squared', 'wasserstein'], help='Distance metric for learner')
+    parser.add_argument('--metric', type=str, default='kl', choices=['kl','l2', 'chi_squared', 'wasserstein','lk'], help='Distance metric for learner')
+    parser.add_argument('--lk_k', type=int, default=1, help='Exponent k for LK distance (used if metric is lk)')
 
     args = parser.parse_args()
     return args
@@ -190,7 +191,12 @@ if __name__ == "__main__":
         torch.save(learner.state_dict(), filename)
         print(f"Learner has finished training and the model was saved to {filename}")
 
-        loss_filename = f"learner-checkpoints/{model_family}-{drafter_indices_str}-{args.metric}-{timestamp}-losses.csv"
+        if args.metric == 'lk':
+            metric_name = f"lk{args.lk_k}"
+        else:
+            metric_name = args.metric
+
+        loss_filename = f"learner-checkpoints/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-losses.csv"
         with open(loss_filename, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(["epoch", "loss"])
@@ -212,5 +218,5 @@ if __name__ == "__main__":
         dataset = EnhancedFeatureDataset(tokenizer, target_model, texts, seq_len=128)
         data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=0)
 
-        sample_training_data(drafters, target_model, data_loader, metric=args.metric, epochs=args.epochs, output=args.ptfile)
+        sample_training_data(drafters, target_model, data_loader, metric=args.metric, epochs=args.epochs, output=args.ptfile, k=args.lk_k)
         print(f"Offline dataset saved to {args.ptfile}")

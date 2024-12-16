@@ -6,7 +6,7 @@
 #SBATCH --mail-user=russell_li@college.harvard.edu
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
 #SBATCH --time=16:00:00
 #SBATCH --mem=250GB
@@ -30,5 +30,6 @@ cd /n/holylfs06/LABS/kempner_fellow_emalach/Lab/rli/2281-Project
 #export SPECIAL_TOKEN="<|sep|>"
 
 #run the finetuning script
-python main.py --mode train_learner --epochs 10 --batch_size 16
+#python main.py --mode train_learner --epochs 10 --batch_size 16
+python main.py --target_model_name EleutherAI/pythia-2.8b --mode create_dataset --epochs 10 --batch_size 16 --drafters EleutherAI/pythia-70m EleutherAI/pythia-160m EleutherAI/pythia-410m  --metric 'l2' --ptfile 'pythia-l2.pt'
 #accelerate launch main.py --mode train_learner --epochs 10 --batch_size 16
