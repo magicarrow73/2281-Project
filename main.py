@@ -63,6 +63,7 @@ def parse_arguments():
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs for learner training')
     parser.add_argument('--batch_size', type=int, default=4, help='Batch size for learner training')
     parser.add_argument('--metric', type=str, default='kl', choices=['kl','l2', 'chi_squared', 'wasserstein'], help='Distance metric for learner')
+    parser.add_argument('--lk_k', type=int, default=1, help='Exponent k for lk distance (used if metric is lk)')
 
     args = parser.parse_args()
     return args
