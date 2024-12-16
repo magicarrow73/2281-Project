@@ -46,9 +46,9 @@ cd /n/holylfs06/LABS/kempner_fellow_emalach/Lab/rli/2281-Project
 #     --ptfile data/pythia-kl-epochs20.pt \
 #     --drafters_idx 0 1 2 \
 #     --metric=kl \
-#     --epochs=10 \
-#     --hidden_dim=128 \
-#     --num_layers=10 \
+#     --epochs=20 \
+#     --hidden_dim=256 \
+#     --num_layers=25 \
 #     --dropout=0.3 \
 #     --sizes 7 16 41
 

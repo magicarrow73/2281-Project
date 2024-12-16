@@ -21,8 +21,8 @@ def get_distributions(drafters, target_model, input_ids):
     drafter_probs = []
     for d in drafters:
         q_i = d.get_token_distribution(input_ids)
-        drafter_probs.append(q_i) #each q_i has dimension (batch, vocab_size)
-    q_i_list = torch.stack(drafter_probs, dim=1) #dimension (batch, L, vocab_size)
+        drafter_probs.append(q_i)
+    q_i_list = torch.stack(drafter_probs, dim=1)
     assert q_i_list.shape[2] == q_v.shape[1]
     return q_v, q_i_list
 
@@ -119,17 +119,15 @@ def train_learner_with_target(learner, drafter_indices, target_model, data_loade
 
     return epoch_losses
 
-def sample_training_data(drafters, target_model, data_loader, metric='kl', epochs=1, lr=1e-4, output="training_data.pt", k=1, sizes = None):
+def sample_training_data(drafters, target_model, data_loader, metric='kl', epochs=1, output="training_data.pt", k=1, sizes = None):
     """
-    Train the Learner to pick a Drafter that best matches the target model's distribution.
+    Generate a pre-computed dataset of features and distances for training a Learner offline so we do not waste resources during inference.
 
-    Steps:
-    - For each batch:
-      - Compute q_v from target model
-      - Compute q_i from each Drafter
-      - Compute distance d_all = d(q_i, q_v) for each i
-      - Learner outputs L_dist = softmax(logits)
-      - Loss = E_{i ~ L_dist}[d(q_i, q_v)] = sum(L_dist * d_all)
+    This function iterates over a dataset multiple times (epochs) and for each batch it does the following:
+        Extracts the hidden states of the target model and computes the average last hidden state and the entropy measure.
+        Obtains distributions q_v (denoting the target) and q_i (denoting the drafter) for the current input batch.
+        Computes distances d_all between drafter model distributions and the target model distribution.
+        Scales distances by the relative model sizes if they are given.
     """
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     cpu = torch.device("cpu")
@@ -169,13 +167,10 @@ def sample_training_data(drafters, target_model, data_loader, metric='kl', epoch
                 q_v_expanded.reshape(-1, vocab_size),
                 metric=metric,
                 k=k)
-            d_all = d_all.reshape(batch_size, L).detach().to(cpu) #dimension (batch, L), reshaped from flattened state
+            d_all = d_all.reshape(batch_size, L).detach().to(cpu)
             d_all = d_all * s
             d_all = d_all.detach()
             data.append({"features": features, "d_all": d_all})
         training_data.append(data)
     torch.save(training_data, output)
     return training_data
-
-# def serialize_data():
-#     for 
