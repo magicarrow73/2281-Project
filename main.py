@@ -21,6 +21,8 @@ from datasets import load_dataset
 import csv
 #import torch.multiprocessing as mp
 
+import wandb
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -70,6 +72,8 @@ def parse_arguments():
     parser.add_argument('--dropout', type=float, default=0.3, help='Dropout rate for the Learner')
 
     parser.add_argument('--save_interval', type=int, default=100, help='Interval measured in batches for averaging and saving intermediate losses')
+    parser.add_argument('--wandb_project', type=str, default=None, help='Wandb project name')
+    parser.add_argument('--wandb_run_name', type=str, default=None, help='Wandb run name')
 
     args = parser.parse_args()
     return args
@@ -170,6 +174,9 @@ if __name__ == "__main__":
     torch.manual_seed(123)
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
+    if args.wandb_project:
+        wandb.init(project=args.wandb_project, name=args.wandb_run_name)
+
     if args.mode == 'decode':
         generate(args.input, args.approx_model_name, args.target_model_name, num_tokens=args.max_tokens, gamma=args.gamma,
                 random_seed = args.seed, verbose=args.verbose, use_benchmark = args.benchmark)
@@ -218,7 +225,7 @@ if __name__ == "__main__":
         drafter_indices_str = ",".join(map(str, drafter_indices))
 
         epoch_losses = train_learner_with_target(learner, drafter_indices, None, None, ptfile=args.ptfile,
-                                                metric=args.metric, epochs=args.epochs,lr=1e-6, sizes = sizes, L=L,
+                                                metric=args.metric, epochs=args.epochs,lr=1e-5, sizes = sizes, L=L,
                                                 save_interval=args.save_interval,
                                                 model_family=model_family,
                                                 drafter_indices_str=drafter_indices_str,
