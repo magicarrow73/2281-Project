@@ -187,7 +187,7 @@ if __name__ == "__main__":
         epoch_losses = train_learner_with_target(learner, drafter_indices, None, None, ptfile=args.ptfile,
                                                  metric=args.metric, epochs=args.epochs)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = f"learner-checkpoints/learner_{timestamp}.pt"
+        filename = f"learner-checkpoints/learnerweights{model_family}-{drafter_indices_str}-{args.metric}-{timestamp}-losses.pt"
         torch.save(learner.state_dict(), filename)
         print(f"Learner has finished training and the model was saved to {filename}")
 
