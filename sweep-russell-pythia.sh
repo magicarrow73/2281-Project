@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=learner-sweep-pythia
 #SBATCH --account=kempner_emalach_lab
-#SBATCH --output=/n/holylfs06/LABS/kempner_fellow_emalach/Lab/rli/2281-Project/logs-pythia-sweep/%j/logs.out
+#SBATCH --output=/n/holylfs06/LABS/kempner_fellow_emalach/Lab/rli/2281-Project/logs-pythia-sweep-batch4/%j/logs.out
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=russell_li@college.harvard.edu
 #SBATCH --nodes=1
@@ -37,6 +37,8 @@ EPOCHS=20
 DROPOUT=0.3
 MODE="train_learner"
 WANDB_PROJECT="2281-project"
+
+CHECKPOINT_DIR="learner-checkpoints-pythia"
 
 PARAMS_LINE=$(sed -n ${SLURM_ARRAY_TASK_ID}p params-sweeping/params-pythia.txt)
 read -r DRAFTERS_IDX_STRING HDIM LAYERS <<< "$PARAMS_LINE"

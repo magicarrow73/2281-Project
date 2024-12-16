@@ -74,6 +74,7 @@ def parse_arguments():
     parser.add_argument('--save_interval', type=int, default=100, help='Interval measured in batches for averaging and saving intermediate losses')
     parser.add_argument('--wandb_project', type=str, default=None, help='Wandb project name')
     parser.add_argument('--wandb_run_name', type=str, default=None, help='Wandb run name')
+    parser.add_argument('--checkpoint_dir', type=str, default='learner-checkpoints', help='Directory to save the learner checkpoints')
 
     args = parser.parse_args()
     return args
@@ -230,9 +231,10 @@ if __name__ == "__main__":
                                                 model_family=model_family,
                                                 drafter_indices_str=drafter_indices_str,
                                                 metric_name=metric_name,
-                                                timestamp=timestamp)
+                                                timestamp=timestamp,
+                                                checkpoint_dir='learner-checkpoints')
 
-        filename = f"learner-checkpoints/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-weights.pt"
+        filename = f"{args.checkpoint_dir}/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-weights.pt"
         torch.save(learner.state_dict(), filename)
         print(f"Learner has finished training and the model was saved to {filename}")
 
