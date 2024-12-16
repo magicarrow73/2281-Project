@@ -57,12 +57,12 @@ def parse_arguments():
 
     parser.add_argument('--mode', type=str, default='decode', choices=['decode', 'train_learner', 'create_dataset'], help='Choose mode: decode, train_learner, or create_dataset')
     parser.add_argument('--drafters', nargs='*', help='List of drafters', required=False)
+    parser.add_argument('--sizes', nargs='*', help='List of size', required=False)
     parser.add_argument('--drafters_idx', nargs="*", help='List of drafter indices for training', required = False)
     parser.add_argument('--ptfile', type=str, help='ptfile', required=False)
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs for learner training')
     parser.add_argument('--batch_size', type=int, default=4, help='Batch size for learner training')
-    parser.add_argument('--metric', type=str, default='kl', choices=['kl','l2', 'chi_squared', 'wasserstein','lk'], help='Distance metric for learner')
-    parser.add_argument('--lk_k', type=int, default=1, help='Exponent k for LK distance (used if metric is lk)')
+    parser.add_argument('--metric', type=str, default='kl', choices=['kl','l2', 'chi_squared', 'wasserstein'], help='Distance metric for learner')
 
     args = parser.parse_args()
     return args
@@ -191,12 +191,7 @@ if __name__ == "__main__":
         torch.save(learner.state_dict(), filename)
         print(f"Learner has finished training and the model was saved to {filename}")
 
-        if args.metric == 'lk':
-            metric_name = f"lk{args.lk_k}"
-        else:
-            metric_name = args.metric
-
-        loss_filename = f"learner-checkpoints/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-losses.csv"
+        loss_filename = f"learner-checkpoints/{model_family}-{drafter_indices_str}-{args.metric}-{timestamp}-losses.csv"
         with open(loss_filename, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(["epoch", "loss"])
@@ -210,6 +205,8 @@ if __name__ == "__main__":
         drafters = args.drafters
         drafters = [ModelWrapper(m) for m in drafters]
         L = len(drafters)
+        sizes = args.sizes
+        sizes = [float(s) for s in sizes]
 
         tokenizer = target_model.tokenizer
         raw_dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
@@ -218,5 +215,5 @@ if __name__ == "__main__":
         dataset = EnhancedFeatureDataset(tokenizer, target_model, texts, seq_len=128)
         data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=0)
 
-        sample_training_data(drafters, target_model, data_loader, metric=args.metric, epochs=args.epochs, output=args.ptfile, k=args.lk_k)
+        sample_training_data(drafters, target_model, data_loader, metric=args.metric, epochs=args.epochs, output=args.ptfile, k=args.lk_k, sizes=sizes)
         print(f"Offline dataset saved to {args.ptfile}")
