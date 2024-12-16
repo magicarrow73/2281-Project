@@ -65,6 +65,10 @@ def parse_arguments():
     parser.add_argument('--metric', type=str, default='kl', choices=['kl','l2', 'chi_squared', 'wasserstein', 'lk'], help='Distance metric for learner')
     parser.add_argument('--lk_k', type=int, default=1, help='Exponent k for lk distance (used if metric is lk)')
 
+    parser.add_argument('--hidden_dim', type=int, default=128, help='Hidden dimension size for the Learner')
+    parser.add_argument('--num_layers', type=int, default=3, help='Number of layers for the Learner')
+    parser.add_argument('--dropout', type=float, default=0.3, help='Dropout rate for the Learner')
+
     args = parser.parse_args()
     return args
 
@@ -172,21 +176,35 @@ if __name__ == "__main__":
         if not args.ptfile:
             raise ValueError("Please provide a pre-generated dataset file using --ptfile")
 
+        print(f"Loading dataset from {args.ptfile}...")
+        training_data = torch.load(args.ptfile)
+
         drafter_indices = args.drafters_idx
         if drafter_indices != None:
             drafter_indices = [int(d) for d in drafter_indices]
         else:
-            assert False
+            raise ValueError("Please specify drafter indices using --drafters_idx")
 
-        L = len(drafter_indices)
-        learner = LearnerModel(input_dim=4097, hidden_dim=32, L=L, num_layers=3, dropout=0.2).to(device)
         model_name_parts = args.target_model_name.split('/')
-        model_family = model_name_parts[0] if len(model_name_parts) > 1 else args.target_model_name
+        model_family = model_name_parts[1] if len(model_name_parts) > 1 else args.target_model_name
         model_family = model_family.lower().split('-')[0]
-        drafter_indices_str = ",".join(map(str, drafter_indices))
 
+        if "bloom" in model_family:
+            input_dim = 4097
+        elif "pythia" in model_family:
+            input_dim = 2561
+        else:
+            raise ValueError(f"Unknown model_family: {model_family}, cannot determine input_dim.")
+
+        print(f"Initializing Learner for {model_family} with input_dim={input_dim}...")
+        L = len(drafter_indices)
+        #Initialize the learner; note that bloom is 4097 and pythia is 2561 for the input dimension
+        learner = LearnerModel(input_dim=input_dim, hidden_dim=args.hidden_dim, L=L, num_layers=args.num_layers, dropout=args.dropout).to(device)
+
+        print("Training Learner model...")
         epoch_losses = train_learner_with_target(learner, drafter_indices, None, None, ptfile=args.ptfile,
-                                                 metric=args.metric, epochs=args.epochs)
+                                                 metric=args.metric, epochs=args.epochs,lr=1e-5)
+
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
         if args.metric == 'lk':
@@ -194,11 +212,12 @@ if __name__ == "__main__":
         else:
             metric_name = args.metric
 
-        filename = f"learner-checkpoints/learnerweights{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-losses.pt"
+        drafter_indices_str = ",".join(map(str, drafter_indices))
+        filename = f"learner-checkpoints/learnerweights-{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}.pt"
         torch.save(learner.state_dict(), filename)
         print(f"Learner has finished training and the model was saved to {filename}")
 
-        loss_filename = f"learner-checkpoints/{model_family}-{drafter_indices_str}-{args.metric}-{timestamp}-losses.csv"
+        loss_filename = f"learner-checkpoints/losses-{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}.csv"
         with open(loss_filename, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(["epoch", "loss"])

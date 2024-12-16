@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=learner-training
+#SBATCH --job-name=bloom-dataset
 #SBATCH --account=kempner_emalach_lab
 #SBATCH --output=/n/holylfs06/LABS/kempner_fellow_emalach/Lab/rli/2281-Project/logs/%j/logs.out
 #SBATCH --mail-type=BEGIN,END,FAIL
@@ -30,6 +30,15 @@ cd /n/holylfs06/LABS/kempner_fellow_emalach/Lab/rli/2281-Project
 #export SPECIAL_TOKEN="<|sep|>"
 
 #run the finetuning script
-#python main.py --mode train_learner --epochs 10 --batch_size 16
-python main.py --target_model_name EleutherAI/pythia-2.8b --mode create_dataset --epochs 10 --batch_size 16 --drafters EleutherAI/pythia-70m EleutherAI/pythia-160m EleutherAI/pythia-410m  --metric 'l2' --ptfile 'pythia-l2.pt'
-#accelerate launch main.py --mode train_learner --epochs 10 --batch_size 16
+python main.py --mode train_learner \
+    --target_model_name EleutherAI/pythia-2.8b \
+    --ptfile data/pythia-lk-epochs20.pt \
+    --drafters_idx 0 1 2 \
+    --metric=lk \
+    --lk_k=1 \
+    --epochs=20 \
+    --hidden_dim=512 \
+    --num_layers=25 \
+    --dropout=0.5
+
+#python main.py --target_model_name bigscience/bloomz-7b1 --mode create_dataset --epochs 20 --batch_size 16 --drafters bigscience/bloomz-560m bigscience/bloom-560m bigscience/bloomz-1b1 bigscience/bloom-1b1 --metric 'lk' --ptfile 'bloom-lk-epochs20.pt' --sizes 56 56 110 110

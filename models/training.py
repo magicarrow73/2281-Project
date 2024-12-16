@@ -24,7 +24,7 @@ def get_distributions(drafters, target_model, input_ids):
     assert q_i_list.shape[2] == q_v.shape[1]
     return q_v, q_i_list
 
-def train_learner_with_target(learner, drafter_indices, target_model, data_loader, ptfile, metric='kl', epochs=1, lr=1e-6):
+def train_learner_with_target(learner, drafter_indices, target_model, data_loader, ptfile, metric='kl', epochs=1, lr=1e-5):
     """
     Train the Learner using a pre-generated dataset.
     """
@@ -32,19 +32,19 @@ def train_learner_with_target(learner, drafter_indices, target_model, data_loade
     optimizer = optim.Adam(learner.parameters(), lr=lr)
     learner.train()
 
-    scaler = GradScaler()
-
-    epoch_losses = []
     training_data = torch.load(ptfile)
 
+    scaler = GradScaler()
+    epoch_losses = []
+
     for epoch in range(epochs):
+        print(f"\nStarting epoch {epoch+1}/{epochs}...")
         running_loss = 0.0
         count = 0
 
-        print(f"\nStarting epoch {epoch+1}/{epochs}...")
         data = training_data[epoch]
         for step, d in enumerate(data):
-            if step % 100 == 0:
+            if step % 500 == 0:
                 logging.info(f"Processed {step} batches")
             features = d["features"].to(device)
             if drafter_indices == None:
