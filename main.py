@@ -62,7 +62,7 @@ def parse_arguments():
     parser.add_argument('--ptfile', type=str, help='ptfile', required=False)
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs for learner training')
     parser.add_argument('--batch_size', type=int, default=4, help='Batch size for learner training')
-    parser.add_argument('--metric', type=str, default='kl', choices=['kl','l2', 'chi_squared', 'wasserstein'], help='Distance metric for learner')
+    parser.add_argument('--metric', type=str, default='kl', choices=['kl','l2', 'chi_squared', 'wasserstein', 'lk'], help='Distance metric for learner')
     parser.add_argument('--lk_k', type=int, default=1, help='Exponent k for lk distance (used if metric is lk)')
 
     args = parser.parse_args()
@@ -188,7 +188,13 @@ if __name__ == "__main__":
         epoch_losses = train_learner_with_target(learner, drafter_indices, None, None, ptfile=args.ptfile,
                                                  metric=args.metric, epochs=args.epochs)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = f"learner-checkpoints/learnerweights{model_family}-{drafter_indices_str}-{args.metric}-{timestamp}-losses.pt"
+
+        if args.metric == 'lk':
+            metric_name = f"lk{args.lk_k}"
+        else:
+            metric_name = args.metric
+
+        filename = f"learner-checkpoints/learnerweights{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-losses.pt"
         torch.save(learner.state_dict(), filename)
         print(f"Learner has finished training and the model was saved to {filename}")
 
