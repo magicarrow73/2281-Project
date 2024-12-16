@@ -215,5 +215,5 @@ if __name__ == "__main__":
         dataset = EnhancedFeatureDataset(tokenizer, target_model, texts, seq_len=128)
         data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=0)
 
-        sample_training_data(drafters, target_model, data_loader, metric=args.metric, epochs=args.epochs, output=args.ptfile, sizes=sizes)
+        sample_training_data(drafters, target_model, data_loader, metric=args.metric, epochs=args.epochs, output=args.ptfile, k=args.lk_k, sizes=sizes)
         print(f"Offline dataset saved to {args.ptfile}")

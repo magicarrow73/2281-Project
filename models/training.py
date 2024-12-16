@@ -91,7 +91,7 @@ def train_learner_with_target(learner, drafter_indices, target_model, data_loade
 
     return epoch_losses
 
-def sample_training_data(drafters, target_model, data_loader, metric='kl', epochs=1, lr=1e-4, output="training_data.pt", sizes = None):
+def sample_training_data(drafters, target_model, data_loader, metric='kl', epochs=1, lr=1e-4, output="training_data.pt", k=1, sizes = None):
     """
     Train the Learner to pick a Drafter that best matches the target model's distribution.
 
@@ -139,7 +139,8 @@ def sample_training_data(drafters, target_model, data_loader, metric='kl', epoch
             d_all = compute_distance(
                 q_i_list.reshape(-1, vocab_size),
                 q_v_expanded.reshape(-1, vocab_size),
-                metric=metric
+                metric=metric,
+                k=k
             )
             d_all = d_all.reshape(batch_size, L).detach().to(cpu) #dimension (batch, L), reshaped from flattened state
             d_all = d_all * sizes
