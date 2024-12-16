@@ -1,13 +1,13 @@
 import torch
 from tqdm import tqdm
 import torch
-
+from typing import List
 from sampling.kvcache_model import KVCacheModel
 from sampling.utils import norm_logits, sample, max_fn
 from globals import Decoder
 
 @torch.no_grad()
-def speculative_sampling_v2(prefix : torch.Tensor, approx_models: list(torch.nn.Module), target_model : torch.nn.Module, 
+def speculative_sampling_v2(prefix : torch.Tensor, approx_models: List[torch.nn.Module], target_model : torch.nn.Module, 
                          max_len : int , gamma : int = 4,
                          temperature : float = 1, top_k : int = 0, top_p : float = 0, random_seed : int = None) -> torch.Tensor:
     """

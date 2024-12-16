@@ -131,9 +131,9 @@ def sample_training_data(drafters, target_model, data_loader, metric='kl', epoch
             batch_size, L, vocab_size = q_i_list.size()
             if sizes == None:
                 assert False
-            assert len(sizes) == L
-            sizes = torch.tensor(sizes)
-            sizes = sizes.reshape(1, -1)
+            s = torch.tensor(sizes)
+            assert s.shape[0] == L
+            s = s.reshape(1, -1)
             #features = features.half()
             q_v_expanded = q_v.unsqueeze(1).expand_as(q_i_list) 
             d_all = compute_distance(
@@ -142,7 +142,7 @@ def sample_training_data(drafters, target_model, data_loader, metric='kl', epoch
                 metric=metric,
                 k=k)
             d_all = d_all.reshape(batch_size, L).detach().to(cpu) #dimension (batch, L), reshaped from flattened state
-            d_all = d_all * sizes
+            d_all = d_all * s
             d_all = d_all.detach()
             data.append({"features": features, "d_all": d_all})
         training_data.append(data)
