@@ -5,6 +5,8 @@ from models.metrics import compute_distance
 from tqdm import tqdm
 import logging
 from torch.cuda.amp import autocast, GradScaler
+import csv
+import os
 
 @torch.no_grad()
 def get_distributions(drafters, target_model, input_ids):
@@ -24,7 +26,7 @@ def get_distributions(drafters, target_model, input_ids):
     assert q_i_list.shape[2] == q_v.shape[1]
     return q_v, q_i_list
 
-def train_learner_with_target(learner, drafter_indices, target_model, data_loader, ptfile, metric='kl', epochs=1, lr=1e-5):
+def train_learner_with_target(learner, drafter_indices, target_model, data_loader, ptfile, metric='kl', epochs=1, lr=1e-5, save_interval=50, model_family="unknown", drafter_indices_str="0", metric_name="kl", timestamp="0000-00-00_00-00-00", sizes=None, L=3):
     """
     Train the Learner using a pre-generated dataset.
     """
@@ -37,10 +39,23 @@ def train_learner_with_target(learner, drafter_indices, target_model, data_loade
     scaler = GradScaler()
     epoch_losses = []
 
+    final_loss_filename = f"learner-checkpoints/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-losses.csv"
+    with open(final_loss_filename, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["epoch", "loss"])
+
+    intermediate_loss_filename = f"learner-checkpoints/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-intermediate-losses.csv"
+    with open(intermediate_loss_filename, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["epoch", "step", "loss"])
+
     for epoch in range(epochs):
         print(f"\nStarting epoch {epoch+1}/{epochs}...")
         running_loss = 0.0
         count = 0
+
+        interval_loss_sum = 0.0
+        interval_count = 0
 
         data = training_data[epoch]
         for step, d in enumerate(data):
@@ -52,34 +67,40 @@ def train_learner_with_target(learner, drafter_indices, target_model, data_loade
             else:
                 d_all = d["d_all"]
                 d_all = d_all[:, drafter_indices]
+
+            if sizes == None:
+                assert False
+            s = torch.tensor(sizes)
+            assert s.shape[0] == L
+            s = s.reshape(1, -1)
+            
+            d_all = d_all / s 
             d_all = d_all.to(device)
             optimizer.zero_grad()
 
-            #setting output_hidden_states=True returns all layer states
             with autocast():
-                # for name, param in learner.named_parameters():
-                #     if torch.isnan(param).any():
-                #         print(f"NaN in parameter {name}")
-                #     if torch.isinf(param).any():
-                #         print(f"Inf in parameter {name}")
                 logits = learner(features)
-                # if step % 100 == 0:
-                #     print('d_all is', d_all, 'logits are', logits)
                 L_dist = F.softmax(logits, dim=-1)
                 loss = torch.mean(torch.sum(L_dist * d_all, dim=-1))
 
-            #loss.backward()
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
             #torch.nn.utils.clip_grad_norm_(learner.parameters(), 1.0)
-            # for name, param in learner.named_parameters():
-            #     if torch.isnan(param.grad).any():
-            #         print(f"NaN in gradients of {name}")
-            #optimizer.step()
 
             running_loss += loss.item()
             count += 1
+
+            interval_loss_sum += loss.item()
+            interval_count += 1
+
+            if step > 0 and step % save_interval == 0:
+                interval_avg_loss = interval_loss_sum / interval_count
+                with open(intermediate_loss_filename, 'a', newline='') as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow([epoch, step, interval_avg_loss])
+                interval_loss_sum = 0.0
+                interval_count = 0
 
             if step % 1000 == 0 and step > 0:
                 avg_current_loss = running_loss / count
@@ -88,6 +109,13 @@ def train_learner_with_target(learner, drafter_indices, target_model, data_loade
         avg_loss = running_loss / count
         epoch_losses.append(avg_loss)
         print(f"Epoch {epoch+1} completed with average loss {avg_loss}")
+
+        with open(final_loss_filename, 'a', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow([epoch, avg_loss])
+
+    print(f"Final losses saved to {final_loss_filename}")
+    print(f"Intermediate losses saved to {intermediate_loss_filename}")
 
     return epoch_losses
 

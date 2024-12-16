@@ -69,6 +69,8 @@ def parse_arguments():
     parser.add_argument('--num_layers', type=int, default=3, help='Number of layers for the Learner')
     parser.add_argument('--dropout', type=float, default=0.3, help='Dropout rate for the Learner')
 
+    parser.add_argument('--save_interval', type=int, default=100, help='Interval measured in batches for averaging and saving intermediate losses')
+
     args = parser.parse_args()
     return args
 
@@ -202,8 +204,9 @@ if __name__ == "__main__":
         learner = LearnerModel(input_dim=input_dim, hidden_dim=args.hidden_dim, L=L, num_layers=args.num_layers, dropout=args.dropout).to(device)
 
         print("Training Learner model...")
-        epoch_losses = train_learner_with_target(learner, drafter_indices, None, None, ptfile=args.ptfile,
-                                                 metric=args.metric, epochs=args.epochs,lr=1e-5)
+        sizes = args.sizes
+        sizes = [float(s) for s in sizes]
+        print(f"Sizes is {sizes}")
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
@@ -213,17 +216,18 @@ if __name__ == "__main__":
             metric_name = args.metric
 
         drafter_indices_str = ",".join(map(str, drafter_indices))
-        filename = f"learner-checkpoints/learnerweights-{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}.pt"
+
+        epoch_losses = train_learner_with_target(learner, drafter_indices, None, None, ptfile=args.ptfile,
+                                                metric=args.metric, epochs=args.epochs,lr=1e-6, sizes = sizes, L=L,
+                                                save_interval=args.save_interval,
+                                                model_family=model_family,
+                                                drafter_indices_str=drafter_indices_str,
+                                                metric_name=metric_name,
+                                                timestamp=timestamp)
+
+        filename = f"learner-checkpoints/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-weights.pt"
         torch.save(learner.state_dict(), filename)
         print(f"Learner has finished training and the model was saved to {filename}")
-
-        loss_filename = f"learner-checkpoints/losses-{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}.csv"
-        with open(loss_filename, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(["epoch", "loss"])
-            for epoch_i, loss_val in enumerate(epoch_losses):
-                writer.writerow([epoch_i, loss_val])
-        print(f"Losses saved to {loss_filename}")
 
     elif args.mode == 'create_dataset':
         target_model = ModelWrapper(args.target_model_name)
