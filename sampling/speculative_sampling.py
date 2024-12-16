@@ -7,6 +7,128 @@ from sampling.utils import norm_logits, sample, max_fn
 from globals import Decoder
 
 @torch.no_grad()
+def speculative_sampling_v2(prefix : torch.Tensor, approx_models: list(torch.nn.Module), target_model : torch.nn.Module, 
+                         max_len : int , gamma : int = 4,
+                         temperature : float = 1, top_k : int = 0, top_p : float = 0, random_seed : int = None) -> torch.Tensor:
+    """
+    DeepMind version Speculative Sampling.
+    Accelerating Large Language Model Decoding with Speculative Sampling
+    https://arxiv.org/abs/2302.01318
+    No KV Cache Optimization
+    
+    Args:
+        x (torch.Tensor): input sequence, (batch, prefix_seqlen), Note that the batch dim is always 1 now.
+        approx_model (torch.nn.Module): approx model, the small one
+        target_model (torch.nn.Module): target model, the large one
+        max_len (int): the max overall generated tokens number.
+        gamma (int): $\gamma$, the token number small model guesses.
+        temperature (float, optional): Defaults to 1.
+        top_k (int, optional): Defaults to 0.
+        top_p (float, optional): Defaults to 0.
+
+    Returns:
+        torch.Tensor: generated tokens (batch, target_seqlen)
+    """
+    
+    # seq_len parameters
+    seq_len = prefix.shape[1]
+    T = seq_len + max_len
+    
+    # set learner model parameters
+    input_dim = 4097 
+    hidden_dim = 128
+    L = 3 # 
+    num_layers = 3
+    dropout = 0.2
+ 
+    # initialize model
+    learner = LearnerModel(input_dim, hidden_dim, L, num_layers, dropout)
+
+    # load weights
+    state_dict = torch.load("weights.pt") # EDIT: weights.pt
+    model.load_state_dict(state_dict)
+    
+    
+    assert prefix.shape[0] == 1, "input batch size must be 1"
+
+    with tqdm(total=T, desc="speculative sampling") as pbar:
+        
+        while prefix.shape[1] < T:
+            ### q = M_q[prefix + x_0, x_1, .., x_(gamma-2)]
+            ### get features of target model
+            
+            # get target model output + states
+            outputs = target_model.model(prefix, output_hidden_states=True)
+            last_hidden = outputs.hidden_states[-1]
+            avg_hidden = last_hidden.mean(dim=1)
+
+            #compute qv distribution for last token
+            q_v_target = target_model.get_token_distribution(input_ids)
+            q_v_target = q_v_target.clamp_min(5e-8)
+
+            entropy = -torch.sum(q_v_target * torch.log(q_v_target + 1e-6), dim=-1, keepdim=True)
+            features = torch.cat([avg_hidden, entropy], dim=-1)
+                
+            # sample drafter via learner model
+            learner_logits = learner(features)
+            chosen_model = sample_drafter(learner_logits)
+            
+            x = prefix
+            prefix_len = prefix.shape[1]
+            
+            for _ in range(gamma):
+                # p.logits shape (batch, seq, vocab)
+                
+
+                q = chosen_model(x).logits
+                next_tok = sample(norm_logits(q[:, -1, :], 
+                                  temperature, top_k, top_p))
+                x = torch.cat((x, next_tok), dim=1)
+            
+            # normalize the logits
+            for i in range(q.shape[1]):
+                q[:,i,:] = norm_logits(q[:,i,:],
+                                temperature, top_k, top_p)
+            
+            
+            # p  = M_p[prefix + x_0, x_0, .., x_(gamma-1)]
+            p = target_model(x).logits
+            for i in range(p.shape[1]):
+                p[:,i,:] = norm_logits(p[:,i,:],
+                                temperature, top_k, top_p)
+
+            # n the end position of the valid prefix
+            # x = x_[:prefix_len-1] + x_0, ... x_(gamma-1)
+            
+            is_all_accept = True
+            n = prefix_len - 1
+            for i in range(gamma):
+                if random_seed:
+                    torch.manual_seed(random_seed)
+                r = torch.rand(1, device = p.device)
+                j = x[:, prefix_len + i]
+                
+                if r < torch.min(torch.tensor([1], device=q.device), p[:, prefix_len + i - 1, j] / q[:, prefix_len + i - 1, j]):
+                    # accept, and update n
+                    n += 1
+                else:
+                    # reject
+                    t = sample(max_fn(p[:, n, :] - q[:, n, :]))
+                    is_all_accept = False
+                    break
+         
+            prefix = x[:, :n + 1]
+            
+            if is_all_accept:
+                t = sample(p[:, -1, :])
+            
+            prefix = torch.cat((prefix, t), dim=1)
+            pbar.update(n - pbar.n)
+
+    return prefix
+
+
+@torch.no_grad()
 def speculative_sampling(prefix : torch.Tensor, approx_model : torch.nn.Module, target_model : torch.nn.Module, 
                          max_len : int , gamma : int = 4,
                          temperature : float = 1, top_k : int = 0, top_p : float = 0, verbose : bool = False, random_seed : int = None) -> torch.Tensor:
