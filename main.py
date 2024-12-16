@@ -63,6 +63,7 @@ def parse_arguments():
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs for learner training')
     parser.add_argument('--batch_size', type=int, default=4, help='Batch size for learner training')
     parser.add_argument('--metric', type=str, default='kl', choices=['kl','l2', 'chi_squared', 'wasserstein'], help='Distance metric for learner')
+    parser.add_argument('--lk_k', type=int, default=1, help='Exponent k for lk distance (used if metric is lk)')
 
     args = parser.parse_args()
     return args
@@ -187,7 +188,7 @@ if __name__ == "__main__":
         epoch_losses = train_learner_with_target(learner, drafter_indices, None, None, ptfile=args.ptfile,
                                                  metric=args.metric, epochs=args.epochs)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = f"learner-checkpoints/learner_{timestamp}.pt"
+        filename = f"learner-checkpoints/learnerweights{model_family}-{drafter_indices_str}-{args.metric}-{timestamp}-losses.pt"
         torch.save(learner.state_dict(), filename)
         print(f"Learner has finished training and the model was saved to {filename}")
 

@@ -140,8 +140,7 @@ def sample_training_data(drafters, target_model, data_loader, metric='kl', epoch
                 q_i_list.reshape(-1, vocab_size),
                 q_v_expanded.reshape(-1, vocab_size),
                 metric=metric,
-                k=k
-            )
+                k=k)
             d_all = d_all.reshape(batch_size, L).detach().to(cpu) #dimension (batch, L), reshaped from flattened state
             d_all = d_all * sizes
             d_all = d_all.detach()
