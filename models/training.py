@@ -7,6 +7,7 @@ import logging
 from torch.cuda.amp import autocast, GradScaler
 import csv
 import os
+import wandb
 
 @torch.no_grad()
 def get_distributions(drafters, target_model, input_ids):
@@ -26,7 +27,7 @@ def get_distributions(drafters, target_model, input_ids):
     assert q_i_list.shape[2] == q_v.shape[1]
     return q_v, q_i_list
 
-def train_learner_with_target(learner, drafter_indices, target_model, data_loader, ptfile, metric='kl', epochs=1, lr=1e-5, save_interval=50, model_family="unknown", drafter_indices_str="0", metric_name="kl", timestamp="0000-00-00_00-00-00", sizes=None, L=3):
+def train_learner_with_target(learner, drafter_indices, target_model, data_loader, ptfile, metric='kl', epochs=1, lr=1e-5, save_interval=50, model_family="unknown", drafter_indices_str="0", metric_name="kl", timestamp="0000-00-00_00-00-00", sizes=None, L=3, checkpoint_dir='learner_checkpoints'):
     """
     Train the Learner using a pre-generated dataset.
     """
@@ -39,15 +40,19 @@ def train_learner_with_target(learner, drafter_indices, target_model, data_loade
     scaler = GradScaler()
     epoch_losses = []
 
-    final_loss_filename = f"learner-checkpoints/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-losses.csv"
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    final_loss_filename = f"{checkpoint_dir}/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-losses.csv"
     with open(final_loss_filename, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["epoch", "loss"])
 
-    intermediate_loss_filename = f"learner-checkpoints/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-intermediate-losses.csv"
+    intermediate_loss_filename = f"{checkpoint_dir}/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-intermediate-losses.csv"
     with open(intermediate_loss_filename, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["epoch", "step", "loss"])
+
+    wandb_initialized = wandb.run is not None
 
     for epoch in range(epochs):
         print(f"\nStarting epoch {epoch+1}/{epochs}...")
@@ -99,6 +104,12 @@ def train_learner_with_target(learner, drafter_indices, target_model, data_loade
                 with open(intermediate_loss_filename, 'a', newline='') as csvfile:
                     writer = csv.writer(csvfile)
                     writer.writerow([epoch, step, interval_avg_loss])
+
+                if wandb_initialized:
+                    wandb.log({"intermediate_loss": interval_avg_loss, 
+                               "epoch": epoch+1, 
+                               "step": step})
+
                 interval_loss_sum = 0.0
                 interval_count = 0
 
@@ -113,6 +124,9 @@ def train_learner_with_target(learner, drafter_indices, target_model, data_loade
         with open(final_loss_filename, 'a', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow([epoch, avg_loss])
+        
+        if wandb_initialized:
+            wandb.log({"epoch_loss": avg_loss, "epoch": epoch+1})
 
     print(f"Final losses saved to {final_loss_filename}")
     print(f"Intermediate losses saved to {intermediate_loss_filename}")
