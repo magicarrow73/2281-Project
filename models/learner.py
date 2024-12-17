@@ -20,7 +20,7 @@ class LearnerModel(nn.Module):
         logits = self.output_layer(x)
         return logits
 
-def sample_drafter(learner_logits):
-    probs = F.softmax(learner_logits, dim=-1)
-    drafter_idx = torch.multinomial(probs, num_samples=1)
-    return drafter_idx.item()
+    def sample_drafter(self, learner_logits):
+        probs = F.softmax(learner_logits, dim=-1)
+        drafter_idx = torch.multinomial(probs, num_samples=1)
+        return drafter_idx.item()

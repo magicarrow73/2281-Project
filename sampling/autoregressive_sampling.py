@@ -16,9 +16,9 @@ def autoregressive_sampling(x : torch.Tensor, model : torch.nn.Module, N : int,
             last_ids = x[:, -1]
             if last_ids.dim() == 1:
                 last_ids = torch.unsqueeze(last_ids, 0)
-            outputs = model(last_ids, past_key_values = past_key_values, use_cache = True)
+            outputs = model.forward(last_ids, past_key_values = past_key_values, use_cache = True)
         else:
-            outputs = model(x)
+            outputs = model.forward(x)
         last_p = norm_logits(outputs.logits[::, -1, :], temperature, top_k, top_p)
         past_key_values = outputs.past_key_values
         idx_next = sample(last_p)

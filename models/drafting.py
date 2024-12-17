@@ -18,3 +18,5 @@ class ModelWrapper:
             last_token_logits = outputs.logits[:, -1, :]
             probs = F.softmax(last_token_logits, dim=-1)
         return probs
+    def forward(self, input_ids, past_key_values = None, use_cache = False):
+        return self.model(input_ids, past_key_values = past_key_values, use_cache=use_cache)

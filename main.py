@@ -84,7 +84,7 @@ def parse_arguments():
     parser.add_argument('--max_tokens', '-M', type=int, default=20, help='max token number generated.')
     parser.add_argument('--gamma', '-g', type=int, default=4, help='guess time.')
 
-    parser.add_argument('--mode', type=str, default='decode', choices=['decode', 'train_learner', 'create_dataset', 'distill'], 
+    parser.add_argument('--mode', type=str, default='decode', choices=['decode', 'decode_v2', 'train_learner', 'create_dataset', 'distill'], 
                         help='Choose mode: decode, train_learner, create_dataset, or distill')
     parser.add_argument('--drafters', nargs='*', help='List of drafters', required=False)
     parser.add_argument('--sizes', nargs='*', help='List of size', required=False)
@@ -306,6 +306,11 @@ if __name__ == "__main__":
 
     if args.mode == 'decode':
         generate(args.input, args.approx_model_name, args.target_model_name, num_tokens=args.max_tokens, gamma=args.gamma,
+                random_seed = args.seed, verbose=args.verbose, use_benchmark = args.benchmark)
+    
+    if args.mode == 'decode_v2':
+        assert args.ptfile != None
+        generate_v2(args.input, ptfile = args.ptfile, num_tokens=args.max_tokens, gamma=args.gamma,
                 random_seed = args.seed, verbose=args.verbose, use_benchmark = args.benchmark)
 
     if args.mode == 'decode_v2':
