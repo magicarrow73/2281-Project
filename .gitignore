@@ -6,6 +6,7 @@ learner-checkpoints-bloom-batch4
 
 #Ignore logs directory
 logs/
+logs-distillation/
 *.pt*
 
 #Ignore data directory
@@ -13,6 +14,9 @@ data/
 
 #Ignore plots directory
 plots/
+
+#Ignore distillation directory
+distillation/
 
 #sweep logs
 logs-pythia-sweep-batch4/

@@ -37,8 +37,8 @@ python main.py --mode distill \
     --dataset_config wikitext-2-raw-v1 \
     --dataset_split train \
     --distillation_directory distillation \
-    --target_model_name EleutherAI/pythia-2.8b \
-    --student_model_name EleutherAI/pythia-410m \
+    --target_model_name bigscience/bloom-7b1 \
+    --student_model_name bigscience/bloom-1b1 \
     --epochs=20 \
     --batch_size=4 \
     --lr_distillation=1e-5 \
