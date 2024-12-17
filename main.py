@@ -85,6 +85,7 @@ def parse_arguments():
 
     parser.add_argument('--lr_distillation', type=float, default=1e-5, help='Learning rate for distillation')
     parser.add_argument('--temperature', type=float, default=1.0, help='Temperature for distillation')
+    parser.add_argument('--distillation_directory', type=str, help='Directory for the outputs of distillation', required=False)
 
     args = parser.parse_args()
     return args
@@ -193,7 +194,7 @@ if __name__ == "__main__":
                 random_seed = args.seed, verbose=args.verbose, use_benchmark = args.benchmark)
 
     elif args.mode == 'train_learner':
-        if not args.ptfile:
+        if not args.distillation_directory:
             raise ValueError("Please provide a pre-generated dataset file using --ptfile")
 
         print(f"Loading dataset from {args.ptfile}...")
@@ -269,8 +270,8 @@ if __name__ == "__main__":
 
     elif args.mode == 'distill':
         from models.training import distill_drafter_with_teacher
-        if not args.ptfile:
-            raise ValueError("Please provide a file to save the distilled model weights using --ptfile")
+        if not args.distillation_directory:
+            raise ValueError("Please provide a file to save the distilled model information using --distillation_directory")
 
         if args.dataset_config is not None:
             raw_dataset = load_dataset(args.dataset_name, args.dataset_config)
@@ -288,6 +289,14 @@ if __name__ == "__main__":
 
         distill_epochs = args.epochs
         distill_lr = args.lr_distillation
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        teacher_base = args.target_model_name.replace('/', '_')
+        student_base = args.student_model_name.replace('/', '_')
+        dataset_desc = args.dataset_name
+
+        distill_dir_name = f"{args.distillation_directory}/{teacher_base}_to_{student_base}_{dataset_desc}_{timestamp}"
+
         distill_drafter_with_teacher(student_model, teacher_model, data_loader, epochs=distill_epochs, temperature=args.temperature,
-                                    lr=distill_lr, ptfile=args.ptfile, wandb_project=args.wandb_project, wandb_run_name=args.wandb_run_name)
-        print(f"Distilled student model saved to {args.ptfile}")
+                                    lr=distill_lr, distillation_directory=distill_dir_name, wandb_project=args.wandb_project, wandb_run_name=args.wandb_run_name)
+        print(f"Distilled student model saved to {distill_dir_name}")

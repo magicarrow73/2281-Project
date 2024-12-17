@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=learner-train-pythia
+#SBATCH --job-name=learner-distill-pythia
 #SBATCH --account=kempner_emalach_lab
 #SBATCH --output=/n/holylfs06/LABS/kempner_fellow_emalach/Lab/rli/2281-Project/logs-distillation/%j/logs.out
 #SBATCH --mail-type=BEGIN,END,FAIL
@@ -23,6 +23,8 @@ module load cuda/11.8.0-fasrc01 cudnn/8.9.2.26_cuda11-fasrc01
 source ~/.bashrc
 conda activate 2281-project-env
 
+nvidia-smi
+
 #project directory
 cd /n/holylfs06/LABS/kempner_fellow_emalach/Lab/rli/2281-Project
 
@@ -34,10 +36,17 @@ python main.py --mode distill \
     --dataset_name wikitext \
     --dataset_config wikitext-2-raw-v1 \
     --dataset_split train \
+    --distillation_directory distillation \
     --target_model_name EleutherAI/pythia-2.8b \
     --student_model_name EleutherAI/pythia-160m \
-    --ptfile distilled.pt \
-    --epochs=5 \
+    --epochs=20 \
     --batch_size=8 \
     --lr_distillation=1e-5 \
-    --temperature=1.0
+    --temperature=1.0 &
+PYTHON_PID=$!
+
+#print nvidia-smi ever so often
+while kill -0 $PYTHON_PID 2>/dev/null; do
+    nvidia-smi
+    sleep 60
+done
