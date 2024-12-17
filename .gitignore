@@ -1,6 +1,8 @@
 *__pycache__*
 #Ignore learner checkpoints directory
 learner-checkpoints/
+learner-checkpoints-pythia-batch4
+learner-checkpoints-bloom-batch4
 
 #Ignore logs directory
 logs/
@@ -8,3 +10,16 @@ logs/
 
 #Ignore data directory
 data/
+
+#Ignore plots directory
+plots/
+
+#sweep logs
+logs-pythia-sweep-batch4/
+logs-bloom-sweep-batch4/
+
+#sweeping parameter files
+params-sweeping/
+
+#wandb logs
+wandb/

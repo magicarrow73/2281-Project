@@ -38,7 +38,7 @@ DROPOUT=0.3
 MODE="train_learner"
 WANDB_PROJECT="2281-project"
 
-CHECKPOINT_DIR="learner-checkpoints-bloom"
+CHECKPOINT_DIR="learner-checkpoints-bloom-batch4"
 
 PARAMS_LINE=$(sed -n ${SLURM_ARRAY_TASK_ID}p params-sweeping/params-bloom.txt)
 read -r DRAFTERS_IDX_STRING HDIM LAYERS <<< "$PARAMS_LINE"
