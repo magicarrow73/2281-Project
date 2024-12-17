@@ -1,4 +1,4 @@
-DRAFTER_COMBINATIONS = ["0-1-2", "1-2", "0-1", "0-2"]
+DRAFTER_COMBINATIONS = ["0-1-2", "1-2", "0-1", "0-2", "0", "1", "2"]
 HIDDEN_DIMS = [32, 128, 256]
 NUM_LAYERS = [3, 10, 25]
 

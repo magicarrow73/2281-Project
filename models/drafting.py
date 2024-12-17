@@ -7,7 +7,7 @@ class ModelWrapper:
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype=torch.float16,
+            torch_dtype=torch.float32, #fp32 is fine with pythia-2.8b and pythia-160m for distillation
             #load_in_8bit=True,
             device_map="auto",
             trust_remote_code=True

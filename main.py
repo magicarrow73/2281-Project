@@ -76,6 +76,7 @@ def parse_arguments():
     parser.add_argument('--input', type=str, default="Any recommendations for my holidays in Abu Dhabi?")
     parser.add_argument('--approx_model_name', type=str, default='bigscience/bloom-560m')
     parser.add_argument('--target_model_name', type=str, default='bigscience/bloomz-7b1')
+    parser.add_argument('--student_model_name', type=str, default='bigscience/bloom-560m')
     parser.add_argument('--verbose', '-v', action='store_true', default=False, help='enable verbose mode')
     parser.add_argument('--seed', '-s', type=int, default=None, help='set a random seed, which can makes the result reproducible')
     parser.add_argument('--benchmark', '-b', action='store_true', default=False, help='show benchmark results.')
@@ -83,7 +84,8 @@ def parse_arguments():
     parser.add_argument('--max_tokens', '-M', type=int, default=20, help='max token number generated.')
     parser.add_argument('--gamma', '-g', type=int, default=4, help='guess time.')
 
-    parser.add_argument('--mode', type=str, default='decode', choices=['decode', 'decode_v2', 'train_learner', 'create_dataset'], help='Choose mode: decode, train_learner, or create_dataset')
+    parser.add_argument('--mode', type=str, default='decode', choices=['decode', 'decode_v2', 'train_learner', 'create_dataset', 'distill'], 
+                        help='Choose mode: decode, train_learner, create_dataset, or distill')
     parser.add_argument('--drafters', nargs='*', help='List of drafters', required=False)
     parser.add_argument('--sizes', nargs='*', help='List of size', required=False)
     parser.add_argument('--drafters_idx', nargs="*", help='List of drafter indices for training', required = False)
@@ -100,6 +102,16 @@ def parse_arguments():
     parser.add_argument('--save_interval', type=int, default=100, help='Interval measured in batches for averaging and saving intermediate losses')
     parser.add_argument('--wandb_project', type=str, default=None, help='Wandb project name')
     parser.add_argument('--wandb_run_name', type=str, default=None, help='Wandb run name')
+    parser.add_argument('--checkpoint_dir', type=str, default='learner-checkpoints', help='Directory to save the learner checkpoints')
+
+    allowed_datasets = ['wikitext', 'bookcorpus', 'openwebtext', 'c4', 'ptb_text_only']
+    parser.add_argument('--dataset_name', type=str, default='wikitext', choices=allowed_datasets, help='Name of the dataset family on HuggingFace')
+    parser.add_argument('--dataset_config', type=str, default=None, help='Config of the dataset for instance wikitext-2-raw-v1')
+    parser.add_argument('--dataset_split', type=str, default='train', choices=['train', 'validation', 'test'], help='Split of the dataset')
+
+    parser.add_argument('--lr_distillation', type=float, default=1e-5, help='Learning rate for distillation')
+    parser.add_argument('--temperature', type=float, default=1.0, help='Temperature for distillation')
+    parser.add_argument('--distillation_directory', type=str, help='Directory for the outputs of distillation', required=False)
 
     args = parser.parse_args()
     return args
@@ -302,7 +314,7 @@ if __name__ == "__main__":
                 random_seed = args.seed, verbose=args.verbose, use_benchmark = args.benchmark)
 
     elif args.mode == 'train_learner':
-        if not args.ptfile:
+        if not args.distillation_directory:
             raise ValueError("Please provide a pre-generated dataset file using --ptfile")
 
         print(f"Loading dataset from {args.ptfile}...")
@@ -350,9 +362,10 @@ if __name__ == "__main__":
                                                 model_family=model_family,
                                                 drafter_indices_str=drafter_indices_str,
                                                 metric_name=metric_name,
-                                                timestamp=timestamp)
+                                                timestamp=timestamp,
+                                                checkpoint_dir=args.checkpoint_dir)
 
-        filename = f"learner-checkpoints/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-weights.pt"
+        filename = f"{args.checkpoint_dir}/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-weights.pt"
         torch.save(learner.state_dict(), filename)
         print(f"Learner has finished training and the model was saved to {filename}")
 
@@ -374,3 +387,36 @@ if __name__ == "__main__":
 
         sample_training_data(drafters, target_model, data_loader, metric=args.metric, epochs=args.epochs, output=args.ptfile, k=args.lk_k, sizes=sizes)
         print(f"Offline dataset saved to {args.ptfile}")
+
+    elif args.mode == 'distill':
+        from models.training import distill_drafter_with_teacher
+        if not args.distillation_directory:
+            raise ValueError("Please provide a file to save the distilled model information using --distillation_directory")
+
+        if args.dataset_config is not None:
+            raw_dataset = load_dataset(args.dataset_name, args.dataset_config)
+        else:
+            raw_dataset = load_dataset(args.dataset_name)
+
+        texts = [item["text"] for item in raw_dataset[args.dataset_split] if item["text"].strip() != ""]
+        
+        teacher_model = ModelWrapper(args.target_model_name)
+        student_model = ModelWrapper(args.student_model_name)
+
+        tokenizer = teacher_model.tokenizer
+        dataset = EnhancedFeatureDataset(tokenizer, teacher_model, texts, seq_len=128)
+        data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=0)
+
+        distill_epochs = args.epochs
+        distill_lr = args.lr_distillation
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        teacher_base = args.target_model_name.replace('/', '_')
+        student_base = args.student_model_name.replace('/', '_')
+        dataset_desc = args.dataset_name
+
+        distill_dir_name = f"{args.distillation_directory}/{teacher_base}_to_{student_base}_{dataset_desc}_{timestamp}"
+
+        distill_drafter_with_teacher(student_model, teacher_model, data_loader, epochs=distill_epochs, temperature=args.temperature,
+                                    lr=distill_lr, distillation_directory=distill_dir_name, wandb_project=args.wandb_project, wandb_run_name=args.wandb_run_name)
+        print(f"Distilled student model saved to {distill_dir_name}")
