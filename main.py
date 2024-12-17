@@ -8,7 +8,7 @@ import logging
 import sys
 
 from sampling import autoregressive_sampling, speculative_sampling, speculative_sampling_v2
-from sampling.speculative_sampling import speculative_sampling, speculative_sampling_v2, speculative_sampling_v3
+from sampling.speculative_sampling import speculative_sampling, speculative_sampling_v2, speculative_sampling_v3, speculative_sampling_v4
 from globals import Decoder
 #from accelerate import Accelerator
 
@@ -47,12 +47,12 @@ MODELZOO = {
 
 drafter_models = {
     "pythia": ["EleutherAI/pythia-70m", "EleutherAI/pythia-160m", "EleutherAI/pythia-410m"],
-    "bloom": ["bigscience/bloomz-560m, bigscience/bloom-560m, bigscience/bloomz-1b1", "bigscience/bloom-1b1"]
+    "bloomz": ["bigscience/bloomz-560m", "bigscience/bloom-560m","bigscience/bloomz-1b1", "bigscience/bloom-1b1"]
 }
 
 target_models = {
     "pythia": "EleutherAI/pythia-2.8b",
-    "bloom": "bigscience/bloomz-7b1"
+    "bloomz": "bigscience/bloomz-7b1"
 }
 
 def parse_file_name(s):
@@ -194,7 +194,7 @@ def generate(input_text, approx_model_name, target_model_name, num_tokens=20, ga
         benchmark(speculative_sampling, "SP", use_profiling,
                   input_ids, small_model, large_model, max_len = num_tokens, gamma = gamma, top_k = top_k, top_p=top_p, random_seed = random_seed)
 
-def generate_v2(input_text, ptfile, num_tokens=20, gamma = 4,
+def generate_v2(input_text, ptfile, num_tokens=20, gamma = 10,
              random_seed = None, verbose = False, use_benchmark = False, use_profiling = False):
     # NOTE() approx_model_name and target_model_name should use the same tokenizer!
     
@@ -224,17 +224,16 @@ def generate_v2(input_text, ptfile, num_tokens=20, gamma = 4,
     
     input_ids = tokenizer.encode(input_text, return_tensors='pt').to(torch_device)
 
-    top_k = 20
-    top_p = 0.9
+    # top_k = 0
+    # top_p = 0.0
 
     torch.manual_seed(123)
-    output = autoregressive_sampling(input_ids, large_model, num_tokens, top_k = top_k, top_p=top_p)
+    output = autoregressive_sampling(input_ids, large_model, num_tokens)
     generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
     color_print(f"large (target) model autoregressive_sampling: {generated_text}")
-    
     if use_benchmark:
         benchmark(autoregressive_sampling, "AS_large", use_profiling,
-                  input_ids, large_model, num_tokens, top_k = top_k, top_p=top_p)
+                  input_ids, large_model, num_tokens)
 
     # torch.manual_seed(123)
     # output = autoregressive_sampling(input_ids, small_model, num_tokens, top_k = top_k, top_p=top_p)
@@ -247,8 +246,8 @@ def generate_v2(input_text, ptfile, num_tokens=20, gamma = 4,
     
     # initialize model    
     # set learner model parameters
-    input_dim = 2561 
-    hidden_dim = 256
+    input_dim = 4097 
+    hidden_dim = 32
     L = len(small_models) # 
     num_layers = 25
     dropout = 0.2
@@ -259,10 +258,16 @@ def generate_v2(input_text, ptfile, num_tokens=20, gamma = 4,
     learner.load_state_dict(state_dict)
     learner = learner.to(torch_device)
     
-    torch.manual_seed(123)
-    output = speculative_sampling_v3(input_ids, small_models, large_model, learner, num_tokens, top_k = top_k, top_p=top_p, random_seed = random_seed)
+    if random_seed != None:
+        torch.manual_seed(random_seed)
+    else:
+        torch.manual_seed(123)
+    loops, output = speculative_sampling_v3(input_ids, small_models, large_model, learner, num_tokens)
+    # output = autoregressive_sampling(input_ids, small_models[1], num_tokens)
     generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
     color_print(f"our speculative_sampling: {generated_text}")   
+    print(loops)
+
     
     # torch.manual_seed(123)
     # output = speculative_sampling_v2(input_ids, small_model, large_model, num_tokens, top_k = top_k, top_p=top_p, random_seed = random_seed)
@@ -276,7 +281,7 @@ def generate_v2(input_text, ptfile, num_tokens=20, gamma = 4,
     
     if use_benchmark:
         benchmark(speculative_sampling_v3, "SP", use_profiling,
-                  input_ids, small_models, large_model, max_len = num_tokens, gamma = gamma, top_k = top_k, top_p=top_p, random_seed = random_seed)
+                  input_ids, small_models, large_model, learner, max_len = num_tokens, gamma = gamma, random_seed = random_seed)
 
 if __name__ == "__main__":
     args = parse_arguments()
