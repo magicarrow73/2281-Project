@@ -4,10 +4,13 @@ import torch
 from typing import List
 from sampling.kvcache_model import KVCacheModel
 from sampling.utils import norm_logits, sample, max_fn
+import torch.nn.functional as F
 from globals import Decoder
+from torch.cuda.amp import autocast
+import numpy as np
 
 @torch.no_grad()
-def speculative_sampling_v2(prefix : torch.Tensor, approx_models: List[torch.nn.Module], target_model : torch.nn.Module, 
+def speculative_sampling_v3(prefix : torch.Tensor, approx_models: List[torch.nn.Module], target_model : torch.nn.Module, learner : torch.nn.Module, 
                          max_len : int , gamma : int = 4,
                          temperature : float = 1, top_k : int = 0, top_p : float = 0, random_seed : int = None) -> torch.Tensor:
     """
@@ -35,24 +38,15 @@ def speculative_sampling_v2(prefix : torch.Tensor, approx_models: List[torch.nn.
     T = seq_len + max_len
     
     # set learner model parameters
-    input_dim = 4097 
-    hidden_dim = 128
-    L = 3 # 
-    num_layers = 3
+    # input_dim = 4097 
+    # hidden_dim = 128
+    # L = 3 # 
+    # num_layers = 3
     dropout = 0.2
- 
-    # initialize model
-    learner = LearnerModel(input_dim, hidden_dim, L, num_layers, dropout)
-
-    # load weights
-    state_dict = torch.load("weights.pt") # EDIT: weights.pt
-    model.load_state_dict(state_dict)
-    
-    
     assert prefix.shape[0] == 1, "input batch size must be 1"
 
-    with tqdm(total=T, desc="speculative sampling") as pbar:
-        
+    # with tqdm(total=T, desc="speculative sampling") as pbar:
+    with autocast():
         while prefix.shape[1] < T:
             ### q = M_q[prefix + x_0, x_1, .., x_(gamma-2)]
             ### get features of target model
@@ -63,7 +57,7 @@ def speculative_sampling_v2(prefix : torch.Tensor, approx_models: List[torch.nn.
             avg_hidden = last_hidden.mean(dim=1)
 
             #compute qv distribution for last token
-            q_v_target = target_model.get_token_distribution(input_ids)
+            q_v_target = target_model.get_token_distribution(prefix)
             q_v_target = q_v_target.clamp_min(5e-8)
 
             entropy = -torch.sum(q_v_target * torch.log(q_v_target + 1e-6), dim=-1, keepdim=True)
@@ -71,7 +65,10 @@ def speculative_sampling_v2(prefix : torch.Tensor, approx_models: List[torch.nn.
                 
             # sample drafter via learner model
             learner_logits = learner(features)
-            chosen_model = sample_drafter(learner_logits)
+            idx = learner.sample_drafter(learner_logits)
+            print(idx)
+            chosen_model = approx_models[idx]
+            
             
             x = prefix
             prefix_len = prefix.shape[1]
@@ -80,11 +77,12 @@ def speculative_sampling_v2(prefix : torch.Tensor, approx_models: List[torch.nn.
                 # p.logits shape (batch, seq, vocab)
                 
 
-                q = chosen_model(x).logits
+                q = chosen_model.model(x).logits
+                print(q)
                 next_tok = sample(norm_logits(q[:, -1, :], 
-                                  temperature, top_k, top_p))
+                                temperature, top_k, top_p))
+                print(next_tok)
                 x = torch.cat((x, next_tok), dim=1)
-            
             # normalize the logits
             for i in range(q.shape[1]):
                 q[:,i,:] = norm_logits(q[:,i,:],
@@ -92,7 +90,7 @@ def speculative_sampling_v2(prefix : torch.Tensor, approx_models: List[torch.nn.
             
             
             # p  = M_p[prefix + x_0, x_0, .., x_(gamma-1)]
-            p = target_model(x).logits
+            p = target_model.model(x).logits
             for i in range(p.shape[1]):
                 p[:,i,:] = norm_logits(p[:,i,:],
                                 temperature, top_k, top_p)
@@ -116,14 +114,14 @@ def speculative_sampling_v2(prefix : torch.Tensor, approx_models: List[torch.nn.
                     t = sample(max_fn(p[:, n, :] - q[:, n, :]))
                     is_all_accept = False
                     break
-         
+        
             prefix = x[:, :n + 1]
             
             if is_all_accept:
                 t = sample(p[:, -1, :])
             
             prefix = torch.cat((prefix, t), dim=1)
-            pbar.update(n - pbar.n)
+            # pbar.update(n - pbar.n)
 
     return prefix
 

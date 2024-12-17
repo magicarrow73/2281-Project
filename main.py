@@ -8,10 +8,11 @@ import logging
 import sys
 
 from sampling import autoregressive_sampling, speculative_sampling, speculative_sampling_v2
+from sampling.speculative_sampling import speculative_sampling, speculative_sampling_v2, speculative_sampling_v3
 from globals import Decoder
 #from accelerate import Accelerator
 
-from models.learner import LearnerModel, sample_drafter
+from models.learner import LearnerModel
 from models.drafting import ModelWrapper
 from models.training import train_learner_with_target, get_distributions, sample_training_data
 from torch.utils.data import Dataset, DataLoader
@@ -44,6 +45,31 @@ MODELZOO = {
     "baichuan-13b": "/share_nfs/duanqiyuan/models/source_models/hf/Baichuan-13B-Base",
 }
 
+drafter_models = {
+    "pythia": ["EleutherAI/pythia-70m", "EleutherAI/pythia-160m", "EleutherAI/pythia-410m"],
+    "bloom": ["bigscience/bloomz-560m, bigscience/bloom-560m, bigscience/bloomz-1b1", "bigscience/bloom-1b1"]
+}
+
+target_models = {
+    "pythia": "EleutherAI/pythia-2.8b",
+    "bloom": "bigscience/bloomz-7b1"
+}
+
+def parse_file_name(s):
+    i = 0
+    while s[i] != '-':
+        i+=1
+    family = s[:i]
+    i += 1
+    l = []
+    while True:
+        l.append(int(s[i]))
+        i += 1
+        if s[i] == '-':
+            break
+        i += 1
+    return family, l
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description='args for main.py')
 
@@ -57,7 +83,7 @@ def parse_arguments():
     parser.add_argument('--max_tokens', '-M', type=int, default=20, help='max token number generated.')
     parser.add_argument('--gamma', '-g', type=int, default=4, help='guess time.')
 
-    parser.add_argument('--mode', type=str, default='decode', choices=['decode', 'train_learner', 'create_dataset'], help='Choose mode: decode, train_learner, or create_dataset')
+    parser.add_argument('--mode', type=str, default='decode', choices=['decode', 'decode_v2', 'train_learner', 'create_dataset'], help='Choose mode: decode, train_learner, or create_dataset')
     parser.add_argument('--drafters', nargs='*', help='List of drafters', required=False)
     parser.add_argument('--sizes', nargs='*', help='List of size', required=False)
     parser.add_argument('--drafters_idx', nargs="*", help='List of drafter indices for training', required = False)
@@ -168,6 +194,90 @@ def generate(input_text, approx_model_name, target_model_name, num_tokens=20, ga
         benchmark(speculative_sampling, "SP", use_profiling,
                   input_ids, small_model, large_model, max_len = num_tokens, gamma = gamma, top_k = top_k, top_p=top_p, random_seed = random_seed)
 
+def generate_v2(input_text, ptfile, num_tokens=20, gamma = 4,
+             random_seed = None, verbose = False, use_benchmark = False, use_profiling = False):
+    # NOTE() approx_model_name and target_model_name should use the same tokenizer!
+    
+    torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    family, drafter_idxs = parse_file_name(ptfile)
+    tokenizer = AutoTokenizer.from_pretrained(target_models[family], trust_remote_code=True)
+  
+    Decoder().set_tokenizer(tokenizer)
+    # print(f"begin loading models: \n {approx_model_name} \n {target_model_name}")
+    # small_model = AutoModelForCausalLM.from_pretrained(approx_model_name, 
+    #                                                    torch_dtype=torch.float16,
+    #                                                    #device_map="auto",
+    #                                                    device_map="cuda",
+    #                                                    #load_in_8bit=True,
+    #                                                    #offload_folder="offload",
+    #                                                    trust_remote_code=True)
+    # large_model = AutoModelForCausalLM.from_pretrained(target_model_name, 
+                                                    #    torch_dtype=torch.float16,
+                                                    #    #device_map="auto",
+                                                    #    device_map="cuda",
+                                                    #    #load_in_8bit=True,
+                                                    #    #offload_folder="offload",
+                                                    #    trust_remote_code=True)
+    large_model = ModelWrapper(target_models[family])
+    small_models = [ModelWrapper(drafter_models[family][i]) for i in drafter_idxs]
+    print("finish loading models")
+    
+    input_ids = tokenizer.encode(input_text, return_tensors='pt').to(torch_device)
+
+    top_k = 20
+    top_p = 0.9
+
+    torch.manual_seed(123)
+    output = autoregressive_sampling(input_ids, large_model, num_tokens, top_k = top_k, top_p=top_p)
+    generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
+    color_print(f"large (target) model autoregressive_sampling: {generated_text}")
+    
+    if use_benchmark:
+        benchmark(autoregressive_sampling, "AS_large", use_profiling,
+                  input_ids, large_model, num_tokens, top_k = top_k, top_p=top_p)
+
+    # torch.manual_seed(123)
+    # output = autoregressive_sampling(input_ids, small_model, num_tokens, top_k = top_k, top_p=top_p)
+    # generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
+    # color_print(f"small (approx) model autoregressive_sampling: {generated_text}")
+    
+    # if use_benchmark:
+    #     benchmark(autoregressive_sampling, "AS_small", use_profiling,
+    #               input_ids, small_model, num_tokens, top_k = top_k, top_p=top_p)
+    
+    # initialize model    
+    # set learner model parameters
+    input_dim = 2561 
+    hidden_dim = 256
+    L = len(small_models) # 
+    num_layers = 25
+    dropout = 0.2
+    learner = LearnerModel(input_dim, hidden_dim, L, num_layers, dropout)
+
+    # load weights
+    state_dict = torch.load(ptfile) # EDIT: weights.pt
+    learner.load_state_dict(state_dict)
+    learner = learner.to(torch_device)
+    
+    torch.manual_seed(123)
+    output = speculative_sampling_v3(input_ids, small_models, large_model, learner, num_tokens, top_k = top_k, top_p=top_p, random_seed = random_seed)
+    generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
+    color_print(f"our speculative_sampling: {generated_text}")   
+    
+    # torch.manual_seed(123)
+    # output = speculative_sampling_v2(input_ids, small_model, large_model, num_tokens, top_k = top_k, top_p=top_p, random_seed = random_seed)
+    # generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
+    # color_print(f"deepmind's speculative_sampling: {generated_text}")   
+
+    # torch.manual_seed(123)
+    # output = speculative_sampling(input_ids, small_model, large_model, num_tokens, gamma = gamma, top_k = top_k, top_p=top_p, random_seed = random_seed, verbose = verbose)
+    # generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
+    # color_print(f"google's speculative_sampling: {generated_text}")
+    
+    if use_benchmark:
+        benchmark(speculative_sampling_v3, "SP", use_profiling,
+                  input_ids, small_models, large_model, max_len = num_tokens, gamma = gamma, top_k = top_k, top_p=top_p, random_seed = random_seed)
+
 if __name__ == "__main__":
     args = parse_arguments()
 
@@ -179,6 +289,11 @@ if __name__ == "__main__":
 
     if args.mode == 'decode':
         generate(args.input, args.approx_model_name, args.target_model_name, num_tokens=args.max_tokens, gamma=args.gamma,
+                random_seed = args.seed, verbose=args.verbose, use_benchmark = args.benchmark)
+    
+    if args.mode == 'decode_v2':
+        assert args.ptfile != None
+        generate_v2(args.input, ptfile = args.ptfile, num_tokens=args.max_tokens, gamma=args.gamma,
                 random_seed = args.seed, verbose=args.verbose, use_benchmark = args.benchmark)
 
     elif args.mode == 'train_learner':
