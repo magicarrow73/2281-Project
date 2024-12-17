@@ -29,18 +29,19 @@ cd /n/holylfs06/LABS/kempner_fellow_emalach/Lab/rli/2281-Project
 #environment variables
 #export SPECIAL_TOKEN="<|sep|>"
 
-#run the finetuning script
-python main.py --mode train_learner \
-    --target_model_name EleutherAI/pythia-2.8b \
-    --ptfile data/pythia-lk-epochs20-batch4.pt \
-    --drafters_idx 0 1 2 \
-    --metric=lk \
-    --lk_k=1 \
-    --epochs=20 \
-    --hidden_dim=32 \
-    --num_layers=3 \
-    --dropout=0.3 \
-    --sizes 7 16 41
+#run the script
+
+# python main.py --mode train_learner \
+#     --target_model_name EleutherAI/pythia-2.8b \
+#     --ptfile data/pythia-lk-epochs20-batch4.pt \
+#     --drafters_idx 0 1 2 \
+#     --metric=lk \
+#     --lk_k=1 \
+#     --epochs=20 \
+#     --hidden_dim=32 \
+#     --num_layers=3 \
+#     --dropout=0.3 \
+#     --sizes 7 16 41
 
 # python main.py --mode train_learner \
 #     --target_model_name EleutherAI/pythia-2.8b \
