@@ -232,7 +232,7 @@ if __name__ == "__main__":
                                                 drafter_indices_str=drafter_indices_str,
                                                 metric_name=metric_name,
                                                 timestamp=timestamp,
-                                                checkpoint_dir='learner-checkpoints')
+                                                checkpoint_dir=args.checkpoint_dir)
 
         filename = f"{args.checkpoint_dir}/{model_family}-{drafter_indices_str}-{metric_name}-{timestamp}-weights.pt"
         torch.save(learner.state_dict(), filename)

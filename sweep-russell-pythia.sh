@@ -38,7 +38,7 @@ DROPOUT=0.3
 MODE="train_learner"
 WANDB_PROJECT="2281-project"
 
-CHECKPOINT_DIR="learner-checkpoints-pythia"
+CHECKPOINT_DIR="learner-checkpoints-pythia-batch4"
 
 PARAMS_LINE=$(sed -n ${SLURM_ARRAY_TASK_ID}p params-sweeping/params-pythia.txt)
 read -r DRAFTERS_IDX_STRING HDIM LAYERS <<< "$PARAMS_LINE"
@@ -78,4 +78,5 @@ python main.py --mode $MODE \
     --save_interval=100 \
     --batch_size=4 \
     --wandb_project=$WANDB_PROJECT \
-    --wandb_run_name=$RUN_NAME
+    --wandb_run_name=$RUN_NAME \
+    --checkpoint_dir=$CHECKPOINT_DIR
