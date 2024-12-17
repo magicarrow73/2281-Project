@@ -38,15 +38,17 @@ python main.py --mode distill \
     --dataset_split train \
     --distillation_directory distillation \
     --target_model_name EleutherAI/pythia-2.8b \
-    --student_model_name EleutherAI/pythia-160m \
+    --student_model_name EleutherAI/pythia-410m \
     --epochs=20 \
-    --batch_size=8 \
+    --batch_size=4 \
     --lr_distillation=1e-5 \
-    --temperature=1.0 &
-PYTHON_PID=$!
+    --temperature=2.0
+    
+#     &
+# PYTHON_PID=$!
 
-#print nvidia-smi ever so often
-while kill -0 $PYTHON_PID 2>/dev/null; do
-    nvidia-smi
-    sleep 60
-done
+# #print nvidia-smi ever so often
+# while kill -0 $PYTHON_PID 2>/dev/null; do
+#     nvidia-smi
+#     sleep 420
+# done
