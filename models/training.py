@@ -188,3 +188,76 @@ def sample_training_data(drafters, target_model, data_loader, metric='kl', epoch
         training_data.append(data)
     torch.save(training_data, output)
     return training_data
+
+def distill_drafter_with_teacher(student_model_wrapper, teacher_model_wrapper, data_loader, epochs=20, temperature=1.0,
+                                lr=1e-5, distillation_directory="distillation_directory", wandb_project=None, wandb_run_name=None):
+    """
+    Perform distillation by minimizing the KL divergence between distributions.
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    student_model = student_model_wrapper.model.to(device)
+    teacher_model = teacher_model_wrapper.model.to(device)
+    
+    teacher_model.eval()
+    student_model.train()
+
+    optimizer = optim.Adam(student_model.parameters(), lr=lr)
+    #scaler = GradScaler()
+    
+    if wandb_project:
+        if wandb.run is None:
+            wandb.init(project=wandb_project, name=wandb_run_name)
+        wandb_initialized = True
+    else:
+        wandb_initialized = False
+
+    #global_step = 0
+    for epoch in range(epochs):
+        running_loss = 0.0
+        count = 0
+        for step, input_ids in enumerate(data_loader):
+            input_ids = input_ids.to(device)
+            optimizer.zero_grad()
+            
+            #teacher forward pass with next-token prediction
+            with torch.no_grad():
+                teacher_outputs = teacher_model(input_ids)
+                teacher_logits = teacher_outputs.logits[:, -1, :].float()
+                teacher_probs = F.softmax((teacher_logits / temperature), dim=-1)
+            
+            #student forward pass
+            student_outputs = student_model(input_ids)
+            student_logits = student_outputs.logits[:, -1, :]
+            student_log_probs = F.log_softmax((student_logits / temperature), dim=-1)
+
+            #formula from online and kl divergence documentation
+            loss = (temperature**2) * F.kl_div(student_log_probs, teacher_probs, reduction='batchmean')
+            
+            # scaler.scale(loss).backward()
+            # scaler.step(optimizer)
+            # scaler.update()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(student_model.parameters(), max_norm=1.0)
+            optimizer.step()
+
+            running_loss += loss.item()
+            count += 1
+            #global_step += 1
+
+            if step % 200 == 0 and step > 0:
+                avg_loss = running_loss / count
+                logging.info(f"Epoch {epoch+1}, Step {step}, Current Distillation Loss: {avg_loss:.4f}")
+
+        avg_epoch_loss = running_loss / count
+        print(f"Epoch {epoch+1} completed with average distillation loss {avg_epoch_loss:.4f}")
+        if wandb_initialized:
+            wandb.log({"epoch_distill_loss": avg_epoch_loss, "epoch": epoch+1})
+
+    os.makedirs(distillation_directory, exist_ok=True)
+    student_model.save_pretrained(distillation_directory)
+    student_model_wrapper.tokenizer.save_pretrained(distillation_directory)
+
+    if wandb_initialized:
+        wandb.finish()
+    return
