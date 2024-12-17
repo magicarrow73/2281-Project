@@ -104,10 +104,10 @@ def parse_arguments():
     parser.add_argument('--wandb_run_name', type=str, default=None, help='Wandb run name')
     parser.add_argument('--checkpoint_dir', type=str, default='learner-checkpoints', help='Directory to save the learner checkpoints')
 
-    allowed_datasets = ['wikitext', 'bookcorpus', 'openwebtext', 'c4', 'ptb_text_only']
-    parser.add_argument('--dataset_name', type=str, default='wikitext', choices=allowed_datasets, help='Name of the dataset family on HuggingFace')
+    parser.add_argument('--dataset_name', type=str, default='wikitext', help='Name of the dataset family on HuggingFace')
     parser.add_argument('--dataset_config', type=str, default=None, help='Config of the dataset for instance wikitext-2-raw-v1')
     parser.add_argument('--dataset_split', type=str, default='train', choices=['train', 'validation', 'test'], help='Split of the dataset')
+    parser.add_argument('--max_examples', type=int, default=50000, help='Maximum number of examples to process from the dataset')
 
     parser.add_argument('--lr_distillation', type=float, default=1e-5, help='Learning rate for distillation')
     parser.add_argument('--temperature', type=float, default=1.0, help='Temperature for distillation')
@@ -295,6 +295,18 @@ def generate_v2(input_text, ptfile, num_tokens=20, gamma = 10,
         benchmark(speculative_sampling_v3, "SP", use_profiling,
                   input_ids, small_models, large_model, learner, max_len = num_tokens, gamma = gamma, random_seed = random_seed)
 
+def extract_texts_from_dataset(dataset, dataset_name):
+    """
+    Extract texts from the given dataset using the dataset_name argument
+    Note that wikitext, pile-10k, openwebtext-10k, lambada, redpajama-v2 all use "text"
+    Note that ag_news uses "description"
+    """
+    if dataset_name == "ag_news":
+        texts = [item["description"] for item in dataset if item["description"].strip() != ""]
+    else:
+        texts = [item["text"] for item in dataset if item["text"].strip() != ""]
+    return texts
+
 if __name__ == "__main__":
     args = parse_arguments()
 
@@ -308,6 +320,11 @@ if __name__ == "__main__":
         generate(args.input, args.approx_model_name, args.target_model_name, num_tokens=args.max_tokens, gamma=args.gamma,
                 random_seed = args.seed, verbose=args.verbose, use_benchmark = args.benchmark)
     
+    if args.mode == 'decode_v2':
+        assert args.ptfile != None
+        generate_v2(args.input, ptfile = args.ptfile, num_tokens=args.max_tokens, gamma=args.gamma,
+                random_seed = args.seed, verbose=args.verbose, use_benchmark = args.benchmark)
+
     if args.mode == 'decode_v2':
         assert args.ptfile != None
         generate_v2(args.input, ptfile = args.ptfile, num_tokens=args.max_tokens, gamma=args.gamma,
@@ -378,10 +395,18 @@ if __name__ == "__main__":
         sizes = args.sizes
         sizes = [float(s) for s in sizes]
 
+        if args.dataset_config is not None:
+            raw_dataset = load_dataset(args.dataset_name, args.dataset_config)
+        else:
+            raw_dataset = load_dataset(args.dataset_name)
+
+        dataset_split = raw_dataset[args.dataset_split]
+        limit = min(args.max_examples, len(dataset_split))
+        dataset_split = dataset_split.select(range(limit))
+
+        texts = extract_texts_from_dataset(dataset_split, args.dataset_name)
+
         tokenizer = target_model.tokenizer
-        raw_dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
-        texts = [item["text"] for item in raw_dataset["train"] if item["text"].strip() != ""]
-        
         dataset = EnhancedFeatureDataset(tokenizer, target_model, texts, seq_len=128)
         data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=0)
 
@@ -390,6 +415,8 @@ if __name__ == "__main__":
 
     elif args.mode == 'distill':
         from models.training import distill_drafter_with_teacher
+        teacher_model = ModelWrapper(args.target_model_name)
+        student_model = ModelWrapper(args.student_model_name)
         if not args.distillation_directory:
             raise ValueError("Please provide a file to save the distilled model information using --distillation_directory")
 
@@ -398,10 +425,11 @@ if __name__ == "__main__":
         else:
             raw_dataset = load_dataset(args.dataset_name)
 
-        texts = [item["text"] for item in raw_dataset[args.dataset_split] if item["text"].strip() != ""]
-        
-        teacher_model = ModelWrapper(args.target_model_name)
-        student_model = ModelWrapper(args.student_model_name)
+        dataset_split = raw_dataset[args.dataset_split]
+        limit = min(args.max_examples, len(dataset_split))
+        dataset_split = dataset_split.select(range(limit))
+
+        texts = extract_texts_from_dataset(dataset_split, args.dataset_name)
 
         tokenizer = teacher_model.tokenizer
         dataset = EnhancedFeatureDataset(tokenizer, teacher_model, texts, seq_len=128)
@@ -415,7 +443,7 @@ if __name__ == "__main__":
         student_base = args.student_model_name.replace('/', '_')
         dataset_desc = args.dataset_name
 
-        distill_dir_name = f"{args.distillation_directory}/{teacher_base}_to_{student_base}_{dataset_desc}_{timestamp}"
+        distill_dir_name = f"{args.distillation_directory}/{teacher_base}_to_{student_base}_{dataset_desc}_temperature_{args.temperature}_{timestamp}"
 
         distill_drafter_with_teacher(student_model, teacher_model, data_loader, epochs=distill_epochs, temperature=args.temperature,
                                     lr=distill_lr, distillation_directory=distill_dir_name, wandb_project=args.wandb_project, wandb_run_name=args.wandb_run_name)
